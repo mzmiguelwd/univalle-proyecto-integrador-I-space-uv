@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    // I/O Directories
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Node.js Environment
+    "target": "esnext",
+    "module": "CommonJS",
+    "esModuleInterop": true,
+    "types": ["node"],
+
+    // Recommended and Strict Settings
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  // Files to Include and Exclude
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
