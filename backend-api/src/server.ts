@@ -10,9 +10,14 @@ dotenv.config();
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
 
+const rawClientUrl = process.env.CLIENT_URL || "";
+const cleanClientUrl = rawClientUrl.endsWith("/")
+  ? rawClientUrl.slice(0, -1)
+  : rawClientUrl;
+
 // CORS configuration
 const corsOptions = {
-  origin: ["http://localhost:5173", process.env.CLIENT_URL || ""],
+  origin: ["http://localhost:5173", cleanClientUrl],
   methods: ["GET", "POST"],
 };
 
