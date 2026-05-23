@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/mzmiguelwd/univalle-proyecto-integrador-I-space-uv#readme",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "eslint-plugin-jsx-a11y": "^6.10.2"
   }
 }
