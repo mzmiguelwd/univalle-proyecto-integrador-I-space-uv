@@ -11,6 +11,7 @@ import Login from "./pages/Login.tsx";
 import Register from "./pages/Register.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import SetupProfile from "./pages/SetupProfile.tsx";
+import LandingPage from "./pages/LandingPage.tsx";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -66,7 +67,7 @@ function App() {
           path="/"
           element={
             !user ? (
-              <Home />
+              <LandingPage />
             ) : (
               <Navigate
                 to={hasUsername ? "/dashboard" : "/setup-profile"}
