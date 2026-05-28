@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Mail, Lock, Loader2, AlertCircle } from "lucide-react";
 
@@ -7,33 +7,74 @@ import { loginWithEmail, loginWithGoogle } from "../config/auth.ts";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+  const [authStatus, setAuthStatus] = useState<
+    "idle" | "loading" | "error" | "success"
+  >("idle");
+  const successTimerRef = useRef<number | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current);
+      }
+      sessionStorage.removeItem("auth-login-success");
+    };
+  }, []);
+
+  const setAuthError = () => {
+    setAuthStatus("error");
+    setAuthMessage("Usuario o contraseña incorrectos");
+  };
+
+  const showSuccessAndNavigate = () => {
+    setAuthStatus("success");
+    setAuthMessage("¡Bienvenido de nuevo!");
+    sessionStorage.setItem("auth-login-success", "1");
+
+    if (successTimerRef.current) {
+      window.clearTimeout(successTimerRef.current);
+    }
+
+    successTimerRef.current = window.setTimeout(() => {
+      sessionStorage.removeItem("auth-login-success");
+      navigate("/dashboard");
+    }, 650);
+  };
 
   const handleEmailLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    setIsLoading(true);
-    setError("");
+    setAuthStatus("loading");
+    setAuthMessage("");
 
     try {
       await loginWithEmail(email, password);
-      navigate("/dashboard");
+      showSuccessAndNavigate();
     } catch (error: any) {
-      setError("Credenciales invalidas o usuario no encontrado.");
-    } finally {
-      setIsLoading(false);
+      const errorCode = error?.code as string | undefined;
+      if (
+        errorCode === "auth/wrong-password" ||
+        errorCode === "auth/user-not-found" ||
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/invalid-login-credentials"
+      ) {
+        setAuthError();
+      } else {
+        setAuthError();
+      }
     }
   };
 
   const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError("");
+    setAuthStatus("loading");
+    setAuthMessage("");
     try {
       await loginWithGoogle();
+      showSuccessAndNavigate();
     } catch (error: any) {
-      setError("Ocurrió un error al iniciar sesión con Google.");
-      setIsLoading(false);
+      setAuthStatus("error");
+      setAuthMessage("Usuario o contraseña incorrectos");
     }
   };
 
@@ -47,10 +88,16 @@ export default function Login() {
           <p className="text-gray-400">Ingresa a tu salón colaborativo</p>
         </div>
 
-        {error && (
+        {authStatus === "error" && authMessage && (
           <div className="p-3 rounded-lg bg-red-900/50 border border-red-800 flex items-center gap-2 text-red-200 text-sm">
             <AlertCircle className="w-5 h-5 shrink-0" />
-            <p>{error}</p>
+            <p>{authMessage}</p>
+          </div>
+        )}
+
+        {authStatus === "success" && authMessage && (
+          <div className="p-3 rounded-lg bg-green-900/40 border border-green-800 flex items-center gap-2 text-green-200 text-sm">
+            <p>{authMessage}</p>
           </div>
         )}
 
@@ -95,10 +142,10 @@ export default function Login() {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={authStatus === "loading"}
             className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isLoading ? (
+            {authStatus === "loading" ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               "Iniciar Sesión"
@@ -119,7 +166,7 @@ export default function Login() {
 
         <button
           onClick={handleGoogleLogin}
-          disabled={isLoading}
+          disabled={authStatus === "loading"}
           className="w-full flex items-center justify-center gap-3 py-2.5 px-4 border border-gray-700 rounded-lg shadow-sm text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
