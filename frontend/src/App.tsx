@@ -4,14 +4,14 @@ import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-import { auth, db } from "./config/firebase.ts";
+import { auth, db } from "./config/firebase";
 
-import Home from "./pages/Home.tsx";
-import Login from "./pages/Login.tsx";
-import Register from "./pages/Register.tsx";
-import Dashboard from "./pages/Dashboard.tsx";
-import SetupProfile from "./pages/SetupProfile.tsx";
-import LandingPage from "./pages/LandingPage.tsx";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import Dashboard from "./pages/Dashboard";
+import SetupProfile from "./pages/SetupProfile";
+import LandingPage from "./pages/LandingPage";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -96,6 +96,19 @@ function App() {
           element={
             !user ? (
               <Register />
+            ) : (
+              <Navigate
+                to={hasUsername ? "/dashboard" : "/setup-profile"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            !user ? (
+              <ForgotPassword />
             ) : (
               <Navigate
                 to={hasUsername ? "/dashboard" : "/setup-profile"}

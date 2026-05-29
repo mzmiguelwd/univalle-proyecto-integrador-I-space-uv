@@ -55,7 +55,7 @@ export default function Dashboard({ user }: DashboardProps) {
   useEffect(() => {
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-    const socket: Socket = io(backendUrl, { credentials: true });
+    const socket: Socket = io(backendUrl, { withCredentials: true });
 
     socket.on("connect", () => {
       setSocketStatus("Servidor alcanzable y seguro.");

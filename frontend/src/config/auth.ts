@@ -4,6 +4,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import {
   doc,
@@ -104,4 +105,8 @@ export const saveUsername = async (uid: string, username: string) => {
     { username: lowerCaseUsername, originalUsername: username },
     { merge: true },
   );
+};
+
+export const resetPassword = async (email: string) => {
+  await sendPasswordResetEmail(auth, email);
 };
