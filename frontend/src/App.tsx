@@ -12,6 +12,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import SetupProfile from "./pages/SetupProfile";
 import LandingPage from "./pages/LandingPage";
+import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -49,14 +51,7 @@ function App() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center space-y-4">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-gray-400 text-sm font-medium">
-          Autenticando entorno...
-        </p>
-      </div>
-    );
+    return <AuthLoadingScreen />;
   }
 
   return (
@@ -122,11 +117,12 @@ function App() {
         <Route
           path="/setup-profile"
           element={
-            user && !hasUsername ? (
+            <ProtectedRoute
+              isAllowed={Boolean(user) && !hasUsername}
+              redirectTo={!user ? "/login" : "/dashboard"}
+            >
               <SetupProfile onComplete={() => setHasUsername(true)} />
-            ) : (
-              <Navigate to={!user ? "/login" : "/dashboard"} replace />
-            )
+            </ProtectedRoute>
           }
         />
 
@@ -134,11 +130,12 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            user && hasUsername ? (
-              <Dashboard user={user} />
-            ) : (
-              <Navigate to={!user ? "/login" : "/setup-profile"} replace />
-            )
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <Dashboard user={user as User} />
+            </ProtectedRoute>
           }
         />
 
