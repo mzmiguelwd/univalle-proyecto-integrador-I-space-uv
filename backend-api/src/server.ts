@@ -4,6 +4,8 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 
+import setupSwagger from "./docs/swaggerConfig";
+
 // Load environment variables from .env file
 dotenv.config();
 
@@ -22,6 +24,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(express.json());
+setupSwagger(app, PORT);
 
 // Initialization of the HTTP server and WebSocket server
 const server = http.createServer(app);
