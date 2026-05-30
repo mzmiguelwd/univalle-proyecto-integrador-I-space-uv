@@ -55,7 +55,7 @@ export default function Dashboard({ user }: DashboardProps) {
   useEffect(() => {
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-    const socket: Socket = io(backendUrl, { credentials: true });
+    const socket: Socket = io(backendUrl, { withCredentials: true });
 
     socket.on("connect", () => {
       setSocketStatus("Servidor alcanzable y seguro.");
@@ -86,6 +86,7 @@ export default function Dashboard({ user }: DashboardProps) {
             <LayoutDashboard className="w-8 h-8 text-blue-500" />
             <div>
               <h1 className="text-2xl font-bold text-white">Space-UV</h1>
+              <h2>Bienvenido, @{username}</h2>
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-sm text-blue-400 font-medium flex items-center">
                   @{username}
