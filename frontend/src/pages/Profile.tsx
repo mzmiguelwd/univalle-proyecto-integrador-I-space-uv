@@ -28,6 +28,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -101,6 +102,7 @@ export default function Profile() {
       setProfile(updatedProfile);
 
       setMessage("Perfil actualizado correctamente.");
+      setIsEditing(false);
     } catch (error: any) {
       if (error?.type === "validation") {
         setErrors(error.errors);
@@ -149,131 +151,218 @@ export default function Profile() {
     );
   }
 
+  const handleCancelEdit = () => {
+    if (!profile) return;
+
+    setFormData({
+        name: profile.name || "",
+        username: profile.username || "",
+        bio: profile.bio || "",
+        studyArea: profile.studyArea || "",
+    });
+
+    setErrors({});
+    setMessage("");
+    setIsEditing(false);
+    };
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-      <section className="mx-auto max-w-2xl rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="rounded-2xl bg-indigo-500/20 p-3">
-            <User className="h-6 w-6 text-indigo-300" />
-          </div>
+      <section className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl">
+        <div className="mb-8 flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 text-2xl font-bold text-indigo-200">
+                {(profile?.name || profile?.username || "U").charAt(0).toUpperCase()}
+            </div>
 
-          <div>
-            <h1 className="text-2xl font-bold">Mi perfil</h1>
-            <p className="text-sm text-slate-300">
-              Consulta, edita o elimina tu cuenta.
-            </p>
-          </div>
+            <div>
+                <h1 className="text-2xl font-bold">
+                {profile?.name || "Usuario sin nombre"}
+                </h1>
+                <p className="text-sm text-indigo-300">
+                @{profile?.originalUsername || profile?.username || "sin_usuario"}
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                {profile?.email}
+                </p>
+            </div>
+            </div>
+
+            {!isEditing && (
+            <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-400"
+            >
+                Editar perfil
+            </button>
+            )}
         </div>
 
         {message && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-3 text-sm">
+            <div className="mb-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-3 text-sm">
             <AlertCircle className="h-4 w-4" />
             <span>{message}</span>
-          </div>
+            </div>
         )}
 
-        <form onSubmit={handleSave} className="space-y-5">
-          <div>
-            <label className="mb-2 block text-sm font-medium">Nombre</label>
-            <input
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-              placeholder="Tu nombre"
-            />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-300">{errors.name}</p>
-            )}
-          </div>
+        {!isEditing ? (
+            <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">
+                    Nombre
+                </p>
+                <p className="mt-1 font-semibold">
+                    {profile?.name || "No configurado"}
+                </p>
+                </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">Usuario</label>
-            <input
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-              placeholder="usuario"
-            />
-            {errors.username && (
-              <p className="mt-1 text-sm text-red-300">{errors.username}</p>
-            )}
-          </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">
+                    Usuario
+                </p>
+                <p className="mt-1 font-semibold">
+                    @{profile?.originalUsername || profile?.username || "No configurado"}
+                </p>
+                </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">Biografía</label>
-            <textarea
-              name="bio"
-              value={formData.bio}
-              onChange={handleChange}
-              rows={4}
-              className="w-full resize-none rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-              placeholder="Cuéntanos algo sobre ti"
-            />
-            {errors.bio && (
-              <p className="mt-1 text-sm text-red-300">{errors.bio}</p>
-            )}
-          </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">
+                    Área de estudio
+                </p>
+                <p className="mt-1 font-semibold">
+                    {profile?.studyArea || "No configurada"}
+                </p>
+                </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Área de estudio
-            </label>
-            <input
-              name="studyArea"
-              value={formData.studyArea}
-              onChange={handleChange}
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-              placeholder="Ej: Ingeniería de software"
-            />
-            {errors.studyArea && (
-              <p className="mt-1 text-sm text-red-300">{errors.studyArea}</p>
-            )}
-          </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">
+                    Rol
+                </p>
+                <p className="mt-1 font-semibold">
+                    {profile?.role || "student"}
+                </p>
+                </div>
+            </div>
 
-          <div className="rounded-2xl bg-slate-900 p-4 text-sm text-slate-300">
-            <p>
-              <strong>Email:</strong> {profile?.email}
-            </p>
-            <p>
-              <strong>Rol:</strong> {profile?.role || "student"}
-            </p>
-            <p>
-              <strong>Proveedor:</strong> {profile?.provider || "email"}
-            </p>
-          </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="text-xs uppercase tracking-wider text-slate-500">
+                Biografía
+                </p>
+                <p className="mt-2 text-slate-200">
+                {profile?.bio || "Aún no has agregado una biografía."}
+                </p>
+            </div>
 
-          <div className="flex flex-col gap-3 pt-4 sm:flex-row">
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 font-semibold text-white transition hover:bg-indigo-400 disabled:opacity-60"
-            >
-              {saving ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Save className="h-5 w-5" />
-              )}
-              Guardar cambios
-            </button>
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+                <h2 className="font-semibold text-red-200">Zona de peligro</h2>
+                <p className="mt-1 text-sm text-red-100/70">
+                Esta acción eliminará tu perfil y tu cuenta de autenticación.
+                </p>
 
-            <button
-              type="button"
-              disabled={deleting}
-              onClick={handleDeleteAccount}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-500/90 px-4 py-3 font-semibold text-white transition hover:bg-red-400 disabled:opacity-60"
-            >
-              {deleting ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Trash2 className="h-5 w-5" />
-              )}
-              Eliminar cuenta
-            </button>
-          </div>
-        </form>
-      </section>
+                <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDeleteAccount}
+                className="mt-4 flex items-center gap-2 rounded-xl bg-red-500/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-400 disabled:opacity-60"
+                >
+                {deleting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                    <Trash2 className="h-5 w-5" />
+                )}
+                Eliminar cuenta
+                </button>
+            </div>
+            </div>
+        ) : (
+            <form onSubmit={handleSave} className="space-y-5">
+            <div>
+                <label className="mb-2 block text-sm font-medium">Nombre</label>
+                <input
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
+                placeholder="Tu nombre"
+                />
+                {errors.name && (
+                <p className="mt-1 text-sm text-red-300">{errors.name}</p>
+                )}
+            </div>
+
+            <div>
+                <label className="mb-2 block text-sm font-medium">Usuario</label>
+                <input
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
+                placeholder="usuario"
+                />
+                {errors.username && (
+                <p className="mt-1 text-sm text-red-300">{errors.username}</p>
+                )}
+            </div>
+
+            <div>
+                <label className="mb-2 block text-sm font-medium">Biografía</label>
+                <textarea
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                rows={4}
+                className="w-full resize-none rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
+                placeholder="Cuéntanos algo sobre ti"
+                />
+                {errors.bio && (
+                <p className="mt-1 text-sm text-red-300">{errors.bio}</p>
+                )}
+            </div>
+
+            <div>
+                <label className="mb-2 block text-sm font-medium">
+                Área de estudio
+                </label>
+                <input
+                name="studyArea"
+                value={formData.studyArea}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
+                placeholder="Ej: Ingeniería de software"
+                />
+                {errors.studyArea && (
+                <p className="mt-1 text-sm text-red-300">{errors.studyArea}</p>
+                )}
+            </div>
+
+            <div className="flex flex-col gap-3 pt-4 sm:flex-row">
+                <button
+                type="submit"
+                disabled={saving}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 font-semibold text-white transition hover:bg-indigo-400 disabled:opacity-60"
+                >
+                {saving ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                    <Save className="h-5 w-5" />
+                )}
+                Guardar cambios
+                </button>
+
+                <button
+                type="button"
+                onClick={handleCancelEdit}
+                disabled={saving}
+                className="flex flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/10 px-4 py-3 font-semibold text-white transition hover:bg-white/20 disabled:opacity-60"
+                >
+                Cancelar
+                </button>
+            </div>
+            </form>
+        )}
+        </section>
     </main>
   );
 }
