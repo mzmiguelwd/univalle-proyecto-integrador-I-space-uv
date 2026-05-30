@@ -1,99 +1,162 @@
 import { useEffect, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
-import { auth, db } from "./config/firebase.ts";
+import { auth, db } from "./config/firebase";
+
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import Dashboard from "./pages/Dashboard";
+import SetupProfile from "./pages/SetupProfile";
+import LandingPage from "./pages/LandingPage";
+import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 function App() {
-  const [backendStatus, setBackendStatus] = useState<string>("Conectando...");
-  const [socketId, setSocketId] = useState<string | null>(null);
-  const [firebaseStatus, setFirebaseStatus] = useState<string>(
-    "Conectando a Firebase...",
-  );
+  const [user, setUser] = useState<User | null>(null);
+  const [hasUsername, setHasUsername] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (auth && db) {
-      setFirebaseStatus("Conectado (Auth y Firestore listos)");
-    } else {
-      setFirebaseStatus("Error al conectar con Firebase");
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setLoading(true);
 
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-    const socket: Socket = io(backendUrl);
+      if (currentUser) {
+        setUser(currentUser);
+        try {
+          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
 
-    socket.on("connect", () => {
-      setBackendStatus("Conectado al backend");
+          if (userDoc.exists() && userDoc.data().username) {
+            setHasUsername(true);
+          } else {
+            setHasUsername(false);
+          }
+        } catch (error) {
+          console.error("Error al verificar el nombre de usuario:", error);
+          setHasUsername(false);
+        }
+
+        setUser(currentUser);
+      } else {
+        setUser(null);
+        setHasUsername(false);
+      }
+      setLoading(false);
     });
 
-    socket.on("welcome", (data) => {
-      setBackendStatus(data.message);
-      setSocketId(data.socketId);
-    });
-
-    socket.on("connect_error", () => {
-      setBackendStatus("Error al conectar con el backend");
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    return () => unsubscribe();
   }, []);
 
+  if (loading) {
+    return <AuthLoadingScreen />;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col items-center justify-center p-6">
-      <div className="max-w-xl w-full bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-white">
-            Salón de Estudio Colaborativo
-          </h1>
-          <p className="text-gray-400">
-            Dashboard de Diagnóstico de Arquitectura
-          </p>
-        </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Ruta Raíz (Landing Page) */}
+        <Route
+          path="/"
+          element={
+            !user ? (
+              <LandingPage />
+            ) : (
+              <Navigate
+                to={hasUsername ? "/dashboard" : "/setup-profile"}
+                replace
+              />
+            )
+          }
+        />
 
-        <div className="space-y-4">
-          {/* Tarjeta Frontend */}
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">
-                Cliente (React + Vite)
-              </p>
-              <p className="font-semibold text-blue-400">
-                🟢 Renderizando correctamente
-              </p>
-            </div>
-            <div className="text-3xl">⚛️</div>
-          </div>
+        {/* Rutas Públicas */}
+        <Route
+          path="/login"
+          element={
+            !user ? (
+              <Login />
+            ) : (
+              <Navigate
+                to={hasUsername ? "/dashboard" : "/setup-profile"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            !user ? (
+              <Register />
+            ) : (
+              <Navigate
+                to={hasUsername ? "/dashboard" : "/setup-profile"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            !user ? (
+              <ForgotPassword />
+            ) : (
+              <Navigate
+                to={hasUsername ? "/dashboard" : "/setup-profile"}
+                replace
+              />
+            )
+          }
+        />
 
-          {/* Tarjeta Firebase */}
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400 font-medium">
-                BaaS (Firebase)
-              </p>
-              <p className="font-semibold text-yellow-400">{firebaseStatus}</p>
-            </div>
-            <div className="text-3xl">🔥</div>
-          </div>
+        {/* Ruta de Onboarding (Solo para usuarios logueados SIN username) */}
+        <Route
+          path="/setup-profile"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && !hasUsername}
+              redirectTo={!user ? "/login" : "/dashboard"}
+            >
+              <SetupProfile onComplete={() => setHasUsername(true)} />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Tarjeta Backend */}
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex flex-col justify-center">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-400 font-medium">
-                Servidor (Node.js + Socket.io)
-              </p>
-              <div className="text-3xl">⚙️</div>
-            </div>
-            <p className="font-semibold text-green-400">{backendStatus}</p>
-            {socketId && (
-              <p className="text-xs text-gray-500 mt-1 font-mono">
-                Socket ID asignado: {socketId}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+        {/* Ruta Protegida Definitiva */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <Dashboard user={user as User} />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Redirección por defecto */}
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={
+                user
+                  ? hasUsername
+                    ? "/dashboard"
+                    : "/setup-profile"
+                  : "/login"
+              }
+              replace
+            />
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
