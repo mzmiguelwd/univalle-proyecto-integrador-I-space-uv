@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Loader2, Save, Trash2, User } from "lucide-react";
+import { AlertCircle, Loader2, Save, Trash2 } from "lucide-react";
 import { auth } from "../config/firebase";
 import {
   deleteUserAccount,
