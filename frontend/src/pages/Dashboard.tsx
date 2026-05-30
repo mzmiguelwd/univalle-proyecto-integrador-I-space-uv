@@ -17,12 +17,14 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { logoutUser } from "../config/auth.ts";
 import { db } from "../config/firebase.ts";
+import { useNavigate } from "react-router-dom";
 
 interface DashboardProps {
   user: User;
 }
 
 export default function Dashboard({ user }: DashboardProps) {
+  const navigate = useNavigate();
   const [socketStatus, setSocketStatus] = useState<string>(
     "Conectando al servidor...",
   );
@@ -123,13 +125,23 @@ export default function Dashboard({ user }: DashboardProps) {
               </div>
             </div>
           </div>
-          <button
-            onClick={logoutUser}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-red-900/40 hover:text-red-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700 hover:border-red-900"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar Sesión
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/profile")}
+              className="flex items-center gap-2 bg-blue-900/30 hover:bg-blue-800/50 hover:text-blue-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-blue-900/40"
+            >
+              <UserIcon className="w-4 h-4" />
+              Mi perfil
+            </button>
+
+            <button
+              onClick={logoutUser}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-red-900/40 hover:text-red-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700 hover:border-red-900"
+            >
+              <LogOut className="w-4 h-4" />
+              Cerrar Sesión
+            </button>
+          </div>
         </div>
 
         {/* Sección: Atributos del Objeto User */}

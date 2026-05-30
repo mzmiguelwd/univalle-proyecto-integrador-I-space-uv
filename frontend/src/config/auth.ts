@@ -5,6 +5,8 @@ import {
   GoogleAuthProvider,
   signOut,
   sendPasswordResetEmail,
+  deleteUser,
+  updateProfile,
 } from "firebase/auth";
 import {
   doc,
@@ -16,6 +18,7 @@ import {
   getDocs,
   updateDoc,
   getDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
 import { auth, db } from "./firebase.ts";
@@ -109,4 +112,135 @@ export const saveUsername = async (uid: string, username: string) => {
 
 export const resetPassword = async (email: string) => {
   await sendPasswordResetEmail(auth, email);
+};
+
+export type UserProfile = {
+  uid: string;
+  name: string;
+  email: string;
+  username?: string;
+  originalUsername?: string;
+  bio?: string;
+  studyArea?: string;
+  role?: string;
+  provider?: string;
+  createdAt?: unknown;
+  lastLogin?: unknown;
+  updatedAt?: unknown;
+};
+
+export type UpdateUserProfileData = {
+  name: string;
+  username: string;
+  bio?: string;
+  studyArea?: string;
+};
+
+export const validateUserProfile = (data: UpdateUserProfileData) => {
+  const errors: Partial<Record<keyof UpdateUserProfileData, string>> = {};
+
+  const name = data.name.trim();
+  const username = data.username.trim();
+  const bio = data.bio?.trim() || "";
+  const studyArea = data.studyArea?.trim() || "";
+
+  if (name.length < 2) {
+    errors.name = "El nombre debe tener al menos 2 caracteres.";
+  }
+
+  if (name.length > 60) {
+    errors.name = "El nombre no puede superar los 60 caracteres.";
+  }
+
+  if (username.length < 3) {
+    errors.username = "El usuario debe tener al menos 3 caracteres.";
+  }
+
+  if (username.length > 20) {
+    errors.username = "El usuario no puede superar los 20 caracteres.";
+  }
+
+  if (!/^[a-zA-Z0-9._]+$/.test(username)) {
+    errors.username =
+      "El usuario solo puede contener letras, números, puntos y guiones bajos.";
+  }
+
+  if (bio.length > 160) {
+    errors.bio = "La biografía no puede superar los 160 caracteres.";
+  }
+
+  if (studyArea.length > 80) {
+    errors.studyArea = "El área de estudio no puede superar los 80 caracteres.";
+  }
+
+  return errors;
+};
+
+export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+  const userRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) {
+    return null;
+  }
+
+  return userSnap.data() as UserProfile;
+};
+
+export const updateUserProfile = async (
+  uid: string,
+  data: UpdateUserProfileData,
+) => {
+  const errors = validateUserProfile(data);
+
+  if (Object.keys(errors).length > 0) {
+    throw {
+      type: "validation",
+      errors,
+    };
+  }
+
+  const lowerCaseUsername = data.username.trim().toLowerCase();
+  const currentProfile = await getUserProfile(uid);
+
+  if (!currentProfile) {
+    throw new Error("No se encontró el perfil del usuario.");
+  }
+
+  if (currentProfile.username !== lowerCaseUsername) {
+    const isAvailable = await checkUsernameAvailability(lowerCaseUsername);
+
+    if (!isAvailable) {
+      throw {
+        type: "validation",
+        errors: {
+          username: "Este nombre de usuario ya está en uso.",
+        },
+      };
+    }
+  }
+
+  await updateDoc(doc(db, "users", uid), {
+    name: data.name.trim(),
+    username: lowerCaseUsername,
+    originalUsername: data.username.trim(),
+    bio: data.bio?.trim() || "",
+    studyArea: data.studyArea?.trim() || "",
+    updatedAt: serverTimestamp(),
+  });
+
+  if (auth.currentUser) {
+    await updateProfile(auth.currentUser, {
+      displayName: data.name.trim(),
+    });
+  }
+};
+
+export const deleteUserAccount = async (uid: string) => {
+  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error("No hay una sesión válida para eliminar esta cuenta.");
+  }
+
+  await deleteDoc(doc(db, "users", uid));
+  await deleteUser(auth.currentUser);
 };

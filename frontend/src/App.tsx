@@ -14,6 +14,7 @@ import SetupProfile from "./pages/SetupProfile";
 import LandingPage from "./pages/LandingPage";
 import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import Profile from "./pages/Profile";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -69,6 +70,17 @@ function App() {
                 replace
               />
             )
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <Profile />
+            </ProtectedRoute>
           }
         />
 
@@ -138,6 +150,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        
 
         {/* Redirección por defecto */}
         <Route
