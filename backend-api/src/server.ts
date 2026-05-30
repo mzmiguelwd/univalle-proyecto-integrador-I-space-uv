@@ -21,6 +21,7 @@ const cleanClientUrl = rawClientUrl.endsWith("/")
 const corsOptions = {
   origin: ["http://localhost:5173", cleanClientUrl],
   methods: ["GET", "POST"],
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
