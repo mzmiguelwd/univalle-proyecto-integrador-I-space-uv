@@ -5,6 +5,7 @@ import {
   reauthenticateWithGoogle,
   reauthenticateWithPassword,
 } from "../../config/auth";
+import FocusTrap from "../accessibility/FocusTrap";
 
 type ReAuthModalProps = {
   isOpen: boolean;
@@ -67,6 +68,7 @@ export default function ReAuthModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+        <FocusTrap isActive={isOpen} onEscape={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#202020] p-6 text-white shadow-2xl">
         <div className="mb-5 flex items-start gap-4">
           <div className="rounded-xl bg-amber-400/10 p-3 text-amber-300">
@@ -138,6 +140,7 @@ export default function ReAuthModal({
           </button>
         </div>
       </div>
+        </FocusTrap>
     </div>
   );
 }

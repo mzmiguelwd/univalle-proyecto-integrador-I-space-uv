@@ -23,6 +23,7 @@ import {
   type UserProfile,
 } from "../config/auth";
 import ReAuthModal from "../components/auth/ReAuthModal";
+import FocusTrap from "../components/accessibility/FocusTrap";
 
 type FormErrors = Partial<Record<keyof UpdateUserProfileData, string>>;
 
@@ -761,66 +762,74 @@ export default function Profile() {
 
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-[#202020] p-6 text-white shadow-2xl">
-            <div className="mb-5">
-              <h2 className="text-xl font-bold text-red-200">
-                Eliminar cuenta
-              </h2>
-              <p className="mt-2 text-sm text-zinc-400">
-                Esta acción es permanente. Se eliminará tu perfil, tu nombre de
-                usuario reservado y tu cuenta de autenticación.
-              </p>
-            </div>
+          <FocusTrap
+            isActive={showDeleteModal}
+            onEscape={() => {
+              setShowDeleteModal(false);
+              setDeleteConfirmation("");
+            }}
+          >
+            <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-[#202020] p-6 text-white shadow-2xl">
+              <div className="mb-5">
+                <h2 className="text-xl font-bold text-red-200">
+                  Eliminar cuenta
+                </h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Esta acción es permanente. Se eliminará tu perfil, tu nombre de
+                  usuario reservado y tu cuenta de autenticación.
+                </p>
+              </div>
 
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-100">
-              <p className="font-semibold">Antes de continuar:</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                <li>No podrás recuperar tu cuenta después de eliminarla.</li>
-                <li>Tu username quedará liberado para otros usuarios.</li>
-                <li>Se cerrará tu sesión automáticamente.</li>
-              </ul>
-            </div>
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-100">
+                <p className="font-semibold">Antes de continuar:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  <li>No podrás recuperar tu cuenta después de eliminarla.</li>
+                  <li>Tu username quedará liberado para otros usuarios.</li>
+                  <li>Se cerrará tu sesión automáticamente.</li>
+                </ul>
+              </div>
 
-            <div className="mt-5">
-              <label className="mb-2 block text-xs font-semibold text-red-200">
-                Escribe ELIMINAR para confirmar
-              </label>
-              <input
-                value={deleteConfirmation}
-                onChange={(event) => setDeleteConfirmation(event.target.value)}
-                className="w-full rounded-md border border-white/5 bg-[#181818] px-4 py-3 text-sm outline-none transition focus:border-red-300"
-                placeholder="ELIMINAR"
-              />
-            </div>
+              <div className="mt-5">
+                <label className="mb-2 block text-xs font-semibold text-red-200">
+                  Escribe ELIMINAR para confirmar
+                </label>
+                <input
+                  value={deleteConfirmation}
+                  onChange={(event) => setDeleteConfirmation(event.target.value)}
+                  className="w-full rounded-md border border-white/5 bg-[#181818] px-4 py-3 text-sm outline-none transition focus:border-red-300"
+                  placeholder="ELIMINAR"
+                />
+              </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeleteConfirmation("");
-                }}
-                className="flex-1 rounded-md border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60"
-              >
-                Cancelar
-              </button>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteConfirmation("");
+                  }}
+                  className="flex-1 rounded-md border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
 
-              <button
-                type="button"
-                disabled={deleting || deleteConfirmation !== "ELIMINAR"}
-                onClick={handleDeleteAccount}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {deleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Eliminar definitivamente
-              </button>
+                <button
+                  type="button"
+                  disabled={deleting || deleteConfirmation !== "ELIMINAR"}
+                  onClick={handleDeleteAccount}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-md bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Eliminar definitivamente
+                </button>
+              </div>
             </div>
-          </div>
+          </FocusTrap>
         </div>
       )}
 
