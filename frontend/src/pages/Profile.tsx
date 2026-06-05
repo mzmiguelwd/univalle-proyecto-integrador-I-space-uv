@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -15,6 +15,7 @@ import {
 import { auth } from "../config/firebase";
 import { logoutUser } from "../config/auth";
 import {
+  checkUsernameAvailability,
   deleteUserAccount,
   getUserProfile,
   updateUserProfile,
@@ -57,6 +58,11 @@ export default function Profile() {
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<
+    "idle" | "checking" | "available" | "unavailable"
+  >("idle");
+  const usernameTimeoutRef = useRef<number | null>(null);
+  const lastCheckedUsernameRef = useRef("");
   const [showReAuthModal, setShowReAuthModal] = useState(false);
 
   useEffect(() => {
@@ -101,6 +107,54 @@ export default function Profile() {
 
     loadProfile();
   }, [navigate]);
+
+  useEffect(() => {
+    if (usernameTimeoutRef.current) {
+      window.clearTimeout(usernameTimeoutRef.current);
+    }
+
+    if (!isEditing || !profile) return;
+
+    const currentUsername = (profile.username || "").toLowerCase();
+    const nextUsername = formData.username.trim().toLowerCase();
+
+    if (!nextUsername || nextUsername.length < 3) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9._]+$/.test(nextUsername)) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    if (nextUsername === currentUsername) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    usernameTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        if (lastCheckedUsernameRef.current === nextUsername) return;
+
+        lastCheckedUsernameRef.current = nextUsername;
+        setUsernameStatus("checking");
+
+        const isAvailable = await checkUsernameAvailability(nextUsername);
+
+        setUsernameStatus(isAvailable ? "available" : "unavailable");
+      } catch (error) {
+        console.error("Error al verificar username:", error);
+        setUsernameStatus("idle");
+      }
+    }, 1000);
+
+    return () => {
+      if (usernameTimeoutRef.current) {
+        window.clearTimeout(usernameTimeoutRef.current);
+      }
+    };
+  }, [formData.username, isEditing, profile]);
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -165,6 +219,7 @@ export default function Profile() {
 
       setMessage("Perfil actualizado correctamente.");
       setIsEditing(false);
+      setUsernameStatus("idle");
     } catch (error: any) {
       if (error?.type === "validation") {
         setErrors(error.errors);
@@ -236,7 +291,9 @@ export default function Profile() {
 
     setErrors({});
     setMessage("");
+    setUsernameStatus("idle");
     setIsEditing(false);
+    
   };
 
   const displayName = profile?.name || "Usuario sin nombre";
@@ -385,13 +442,33 @@ export default function Profile() {
                       error={errors.name}
                     />
 
-                    <ProfileInput
-                      label="Usuario"
-                      name="username"
-                      value={formData.username}
-                      onChange={handleChange}
-                      error={errors.username}
-                    />
+                    <div>
+                      <ProfileInput
+                        label="Usuario"
+                        name="username"
+                        value={formData.username}
+                        onChange={handleChange}
+                        error={errors.username}
+                      />
+
+                      {!errors.username && usernameStatus === "checking" && (
+                        <p className="mt-1 text-xs text-zinc-400">
+                          Verificando disponibilidad...
+                        </p>
+                      )}
+
+                      {!errors.username && usernameStatus === "available" && (
+                        <p className="mt-1 text-xs text-green-300">
+                          Username disponible.
+                        </p>
+                      )}
+
+                      {!errors.username && usernameStatus === "unavailable" && (
+                        <p className="mt-1 text-xs text-red-300">
+                          Este nombre de usuario ya está en uso.
+                        </p>
+                      )}
+                    </div>
 
                     <ProfileInput
                       label="Área de estudio"
@@ -521,7 +598,7 @@ export default function Profile() {
                   <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                     <button
                       type="submit"
-                      disabled={saving}
+                      disabled={saving || usernameStatus === "checking" || usernameStatus === "unavailable"}
                       className="flex items-center justify-center gap-2 rounded-md bg-sky-300 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-sky-200 disabled:opacity-60"
                     >
                       {saving ? (

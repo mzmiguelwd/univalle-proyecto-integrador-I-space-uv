@@ -22,6 +22,7 @@ import {
   updateDoc,
   getDoc,
   deleteDoc,
+  writeBatch,
 } from "firebase/firestore";
 
 import { auth, db } from "./firebase.ts";
@@ -91,26 +92,49 @@ export const logoutUser = async () => {
   await signOut(auth);
 };
 
-export const checkUsernameAvailability = async (
-  username: string,
-): Promise<boolean> => {
-  const lowerCaseUsername = username.toLowerCase();
-  const q = query(
-    collection(db, "users"),
-    where("username", "==", lowerCaseUsername),
-  );
-  const querySnapshot = await getDocs(q);
+const normalizeUsername = (username: string) => {
+  return username.trim().toLowerCase();
+};
 
-  return querySnapshot.empty;
+export const checkUsernameAvailability = async (username: string) => {
+  const normalizedUsername = normalizeUsername(username);
+
+  if (!normalizedUsername) return false;
+
+  const usernameRef = doc(db, "usernames", normalizedUsername);
+  const usernameSnap = await getDoc(usernameRef);
+
+  return !usernameSnap.exists();
 };
 
 export const saveUsername = async (uid: string, username: string) => {
-  const lowerCaseUsername = username.toLowerCase();
-  await setDoc(
-    doc(db, "users", uid),
-    { username: lowerCaseUsername, originalUsername: username },
+  const normalizedUsername = normalizeUsername(username);
+
+  if (!normalizedUsername) {
+    throw new Error("El nombre de usuario no es válido.");
+  }
+
+  const batch = writeBatch(db);
+
+  const userRef = doc(db, "users", uid);
+  const usernameRef = doc(db, "usernames", normalizedUsername);
+
+  batch.set(
+    userRef,
+    {
+      username: normalizedUsername,
+      originalUsername: username.trim(),
+    },
     { merge: true },
   );
+
+  batch.set(usernameRef, {
+    uid,
+    username: normalizedUsername,
+    createdAt: serverTimestamp(),
+  });
+
+  await batch.commit();
 };
 
 export const resetPassword = async (email: string) => {
@@ -253,14 +277,16 @@ export const updateUserProfile = async (
     };
   }
 
-  const lowerCaseUsername = data.username.trim().toLowerCase();
+  const lowerCaseUsername = normalizeUsername(data.username);
   const currentProfile = await getUserProfile(uid);
 
   if (!currentProfile) {
     throw new Error("No se encontró el perfil del usuario.");
   }
 
-  if (currentProfile.username !== lowerCaseUsername) {
+  const previousUsername = normalizeUsername(currentProfile.username || "");
+
+  if (previousUsername !== lowerCaseUsername) {
     const isAvailable = await checkUsernameAvailability(lowerCaseUsername);
 
     if (!isAvailable) {
@@ -273,7 +299,13 @@ export const updateUserProfile = async (
     }
   }
 
-  await updateDoc(doc(db, "users", uid), {
+  const batch = writeBatch(db);
+
+  const userRef = doc(db, "users", uid);
+  const newUsernameRef = doc(db, "usernames", lowerCaseUsername);
+  const newUsernameSnap = await getDoc(newUsernameRef);
+
+  batch.update(userRef, {
     name: data.name.trim(),
     username: lowerCaseUsername,
     originalUsername: data.username.trim(),
@@ -290,6 +322,33 @@ export const updateUserProfile = async (
     updatedAt: serverTimestamp(),
   });
 
+  if (previousUsername !== lowerCaseUsername) {
+    if (previousUsername) {
+      const previousUsernameRef = doc(db, "usernames", previousUsername);
+      const previousUsernameSnap = await getDoc(previousUsernameRef);
+
+      if (previousUsernameSnap.exists()) {
+        batch.delete(previousUsernameRef);
+      }
+    }
+
+    batch.set(newUsernameRef, {
+      uid,
+      username: lowerCaseUsername,
+      createdAt: serverTimestamp(),
+    });
+  }
+
+  if (previousUsername === lowerCaseUsername && !newUsernameSnap.exists()) {
+    batch.set(newUsernameRef, {
+      uid,
+      username: lowerCaseUsername,
+      createdAt: serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+
   if (auth.currentUser) {
     await updateProfile(auth.currentUser, {
       displayName: data.name.trim(),
@@ -304,9 +363,18 @@ export const deleteUserAccount = async (uid: string) => {
     throw new Error("No hay una sesión válida para eliminar esta cuenta.");
   }
 
-  const userRef = doc(db, "users", uid);
+  const currentProfile = await getUserProfile(uid);
+  const currentUsername = normalizeUsername(currentProfile?.username || "");
 
-  await deleteDoc(userRef);
+  const batch = writeBatch(db);
+
+  batch.delete(doc(db, "users", uid));
+
+  if (currentUsername) {
+    batch.delete(doc(db, "usernames", currentUsername));
+  }
+
+  await batch.commit();
   await deleteUser(currentUser);
 };
 
