@@ -24,7 +24,16 @@ import {
 import ReAuthModal from "../components/auth/ReAuthModal";
 import FocusTrap from "../components/accessibility/FocusTrap";
 
+import RoomCard from "../components/rooms/RoomCard";
+import RoomsEmptyState from "../components/rooms/RoomsEmptyState";
+import {
+  getOwnStudyRooms,
+  type StudyRoom,
+} from "../config/rooms";
+
 type FormErrors = Partial<Record<keyof UpdateUserProfileData, string>>;
+
+
 
 const navItems = [
   { label: "Inicio", icon: BookOpen },
@@ -67,6 +76,9 @@ export default function Profile() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
+  const [rooms, setRooms] = useState<StudyRoom[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -78,6 +90,14 @@ export default function Profile() {
         }
 
         const data = await getUserProfile(currentUser.uid);
+
+        try {
+          const ownRooms = await getOwnStudyRooms(currentUser.uid);
+          setRooms(ownRooms);
+        } catch (roomsError) {
+          console.error("Error cargando salas:", roomsError);
+          setRooms([]);
+        }
 
         if (!data) {
           navigate("/setup-profile");
@@ -104,6 +124,7 @@ export default function Profile() {
         setMessage("No pudimos cargar tu perfil.");
       } finally {
         setLoading(false);
+        setIsLoadingRooms(false);
       }
     };
 
@@ -680,17 +701,19 @@ export default function Profile() {
                   <article className="rounded-lg bg-[#202020] p-6 shadow-xl">
                     <h3 className="mb-5 text-lg font-bold">Salas recientes</h3>
 
-                    <div className="space-y-4">
-                      <RoomItem
-                        title="Cálculo Avanzado II"
-                        subtitle="Biblioteca Central · 5 personas"
-                        action="Entrar"
-                      />
-                      <RoomItem
-                        title="Taller de Tesis"
-                        subtitle="Sala Silenciosa · Hoy, 18:00"
-                        action="Ver detalles"
-                      />
+                    <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-2">
+                      {isLoadingRooms ? (
+                        <div className="rounded-xl border border-white/10 bg-[#202020] p-6 text-sm text-zinc-400">
+                          Cargando salas...
+                        </div>
+                      ) : rooms.length > 0 ? (
+                        rooms.map((room) => (
+                          <RoomCard key={room.id} room={room} />
+                        ))
+                      ) : (
+                        <RoomsEmptyState />
+                      )}
+                      
                     </div>
                   </article>
                 </>
@@ -882,30 +905,7 @@ function InfoTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RoomItem({
-  title,
-  subtitle,
-  action,
-}: {
-  title: string;
-  subtitle: string;
-  action: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <p className="text-sm font-semibold text-sky-300">{title}</p>
-        <p className="text-xs text-zinc-500">{subtitle}</p>
-      </div>
-      <button
-        type="button"
-        className="rounded border border-zinc-500 px-4 py-2 text-xs font-semibold text-white transition hover:border-sky-300 hover:text-sky-200"
-      >
-        {action}
-      </button>
-    </div>
-  );
-}
+
 
 function StatsCard({
   title,

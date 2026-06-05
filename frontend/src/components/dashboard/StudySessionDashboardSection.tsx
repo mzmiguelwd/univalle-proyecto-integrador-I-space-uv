@@ -1,4 +1,3 @@
-import icon4 from "../../assets/landing/icon-2.svg";
 import icon5 from "../../assets/landing/icon-2.svg";
 import icon6 from "../../assets/landing/icon-2.svg";
 import icon7 from "../../assets/landing/icon-2.svg";
@@ -10,41 +9,15 @@ import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../../config/firebase";
 
-const activeRooms = [
-  {
-    id: "calculo-avanzado-ii",
-    status: "En curso",
-    statusClass: "bg-[#4e4635] text-[#c0b49e]",
-    title: "Cálculo Avanzado II",
-    subtitle: "Biblioteca Central • 5 personas",
-    actionLabel: "Unirse ahora",
-    actionClass: "bg-[#d2c5af] text-[#372f20]",
-    avatars: [
-      "bg-[url(/ab6axud9hetfvaeidbnh1uquugzkpzz8lax6sk5sikdcorgtiamun6yj4-gmf-7rch-bgcsj4c-dq9t1ha0hgjpaqdy31je2mu3xsgujf-uyjahuzepvirzxb-uyhle2vcbbcxf-kzj5hvkpbwhb6yial92ygced9dyfmfa13x8t-ymqmx2tmihn7hctmamd2foy75meuequv5hi-k2hmn-gnjcnrb-3wjanwjqmkxy4qcpqygqbc5roqbtjxhly3yygqqpqjl4qwdtixbu.png)] ",
-      "bg-[url(/ab6axucd7b0-jphl7ng-99hzqrv6btgi19j4bihkimcygiyvh-2atjjjl7pl-7ledryf80phnncejbcqlunloylbrlvrt5jmozrs1y7zscfwbydz7u5pj12eafch2ortvkv5vm5v-lord4jajk-rptq4svaxw9-c7zqcphwr0n6n4h0chzq-ijqxiyvemgcfl7ap9-tvnkjfje3ghe7pwotqls64uvepcrr6vv8ncnjxhkkunq842ppqeurk29n1jfvxpxfcvny-onnzxjzx.png)] ",
-    ],
-    extraCount: "+3",
-    cardClass:
-      "w-full h-fit flex flex-col items-start gap-4 p-6 bg-[#202020] rounded-lg border border-solid border-[#40484e1a]",
-    statusTextClass: "text-[#c0b49e]",
-    primary: true,
-  },
-  {
-    id: "taller-de-tesis",
-    status: "Próximamente",
-    statusClass: "bg-[#be8639] text-[#3d2400]",
-    title: "Taller de Tesis",
-    subtitle: "Sala Silenciosa • Hoy, 18:00",
-    actionLabel: "Ver detalles",
-    actionClass:
-      "border border-solid border-[#d2c5af] text-[#d2c5af]",
-    icon: icon4,
-    cardClass:
-      "w-full h-fit flex flex-col items-start gap-4 p-6 bg-[#202020] rounded-lg border border-solid border-[#40484e1a]",
-    statusTextClass: "text-[#3d2400]",
-    primary: false,
-  },
-];
+import { useEffect, useState } from "react";
+import RoomCard from "../rooms/RoomCard";
+import RoomsEmptyState from "../rooms/RoomsEmptyState";
+import {
+  getOwnStudyRooms,
+  type StudyRoom,
+} from "../../config/rooms";
+
+
 
 const recentActivity = [
   {
@@ -128,7 +101,26 @@ type Props = {
   export const StudySessionDashboardSection = ({
     profile,
   }: Props) => {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const [rooms, setRooms] = useState<StudyRoom[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+
+  useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        if (!profile?.uid) return;
+
+        const ownRooms = await getOwnStudyRooms(profile.uid);
+        setRooms(ownRooms);
+      } catch (error) {
+        console.error("Error cargando salas:", error);
+      } finally {
+        setIsLoadingRooms(false);
+      }
+    };
+
+    loadRooms();
+  }, [profile?.uid]);
 
   const handleLogout = async () => {
     try {
@@ -205,51 +197,17 @@ type Props = {
           </div>
 
           <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-2">
-            {activeRooms.map((room) => (
-              <article key={room.id} className={room.cardClass}>
-                <div className="flex items-start justify-between w-full">
-                  <div
-                    className={`px-2 py-1 rounded-sm ${room.statusClass}`}
-                  >
-                    <span className={room.statusTextClass}>
-                      {room.status}
-                    </span>
-                  </div>
-
-                  {room.avatars ? (
-                    <div className="flex">
-                      {room.avatars.map((avatarClass, i) => (
-                        <div
-                          key={`${room.id}-${i}`}
-                          className={`w-6 h-6 rounded-xl border-2 border-[#202020] bg-cover ${avatarClass} ${
-                            i !== 0 ? "-ml-2" : ""
-                          }`}
-                        />
-                      ))}
-                      <div className="-ml-2 w-6 h-6 flex items-center justify-center bg-[#353534] rounded-xl text-[#e5e2e1] text-[10px]">
-                        {room.extraCount}
-                      </div>
-                    </div>
-                  ) : (
-                    <img src={room.icon} alt="Opciones" />
-                  )}
-                </div>
-
-                <h3 className="text-[#8ecdfd]">{room.title}</h3>
-                <p className="text-[#c0c7cf]">{room.subtitle}</p>
-
-                <button
-                  type="button"
-                  className={`w-full py-2 rounded ${
-                    room.primary
-                      ? "bg-[#d2c5af] text-[#372f20]"
-                      : "border border-[#d2c5af] text-[#d2c5af]"
-                  }`}
-                >
-                  {room.actionLabel}
-                </button>
-              </article>
-            ))}
+            {isLoadingRooms ? (
+              <div className="rounded-xl border border-white/10 bg-[#202020] p-6 text-sm text-zinc-400">
+                Cargando salas...
+              </div>
+            ) : rooms.length > 0 ? (
+              rooms.map((room) => (
+                <RoomCard key={room.id} room={room} />
+              ))
+            ) : (
+              <RoomsEmptyState />
+            )}
           </div>
 
           {/* CTA */}
