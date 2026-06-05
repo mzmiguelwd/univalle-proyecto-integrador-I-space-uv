@@ -15,6 +15,7 @@ import LandingPage from "./pages/LandingPage";
 import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Profile from "./pages/Profile";
+import OldDashboard from "./pages/ProvisionalDashboard";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -146,7 +147,7 @@ function App() {
               isAllowed={Boolean(user) && hasUsername}
               redirectTo={!user ? "/login" : "/setup-profile"}
             >
-              <Dashboard user={user as User} />
+              <Dashboard/>
             </ProtectedRoute>
           }
         />
@@ -166,6 +167,18 @@ function App() {
               }
               replace
             />
+          }
+        />
+        {/* Ruta Protegida Definitiva */}
+        <Route
+          path="/dashboard-old"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <OldDashboard user={user as User} />
+            </ProtectedRoute>
           }
         />
       </Routes>
