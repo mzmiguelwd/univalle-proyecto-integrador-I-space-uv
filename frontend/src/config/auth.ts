@@ -7,6 +7,9 @@ import {
   sendPasswordResetEmail,
   deleteUser,
   updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
 } from "firebase/auth";
 import {
   doc,
@@ -295,10 +298,51 @@ export const updateUserProfile = async (
 };
 
 export const deleteUserAccount = async (uid: string) => {
-  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser || currentUser.uid !== uid) {
     throw new Error("No hay una sesión válida para eliminar esta cuenta.");
   }
 
-  await deleteDoc(doc(db, "users", uid));
-  await deleteUser(auth.currentUser);
+  const userRef = doc(db, "users", uid);
+
+  await deleteDoc(userRef);
+  await deleteUser(currentUser);
+};
+
+export const reauthenticateWithPassword = async (password: string) => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser || !currentUser.email) {
+    throw new Error("No hay una sesión válida para reautenticar.");
+  }
+
+  const credential = EmailAuthProvider.credential(currentUser.email, password);
+
+  await reauthenticateWithCredential(currentUser, credential);
+};
+
+export const reauthenticateWithGoogle = async () => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error("No hay una sesión válida para reautenticar.");
+  }
+
+  const provider = new GoogleAuthProvider();
+
+  await reauthenticateWithPopup(currentUser, provider);
+};
+
+export const getCurrentUserProvider = () => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) return null;
+
+  const providerId = currentUser.providerData[0]?.providerId;
+
+  if (providerId === "google.com") return "google";
+  if (providerId === "password") return "email";
+
+  return providerId || null;
 };

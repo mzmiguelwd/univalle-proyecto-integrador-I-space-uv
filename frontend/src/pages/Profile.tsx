@@ -21,6 +21,7 @@ import {
   type UpdateUserProfileData,
   type UserProfile,
 } from "../config/auth";
+import ReAuthModal from "../components/auth/ReAuthModal";
 
 type FormErrors = Partial<Record<keyof UpdateUserProfileData, string>>;
 
@@ -56,6 +57,7 @@ export default function Profile() {
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [showReAuthModal, setShowReAuthModal] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -177,12 +179,17 @@ export default function Profile() {
     }
   };
 
-  const handleDeleteAccount = async () => {
+  const executeDeleteAccount = async () => {
     if (!auth.currentUser) {
       navigate("/login");
       return;
     }
 
+    await deleteUserAccount(auth.currentUser.uid);
+    navigate("/register");
+  };
+
+  const handleDeleteAccount = async () => {
     const confirmDelete = window.confirm(
       "¿Seguro que quieres eliminar tu cuenta? Esta acción no se puede deshacer.",
     );
@@ -191,13 +198,19 @@ export default function Profile() {
 
     try {
       setDeleting(true);
-      await deleteUserAccount(auth.currentUser.uid);
-      navigate("/register");
-    } catch (error) {
+      await executeDeleteAccount();
+    } catch (error: any) {
       console.error(error);
-      setMessage(
-        "No pudimos eliminar tu cuenta. Si iniciaste sesión hace mucho tiempo, cierra sesión, vuelve a entrar e inténtalo otra vez.",
-      );
+
+      if (error?.code === "auth/requires-recent-login") {
+        setShowReAuthModal(true);
+        setMessage(
+          "Por seguridad necesitamos verificar tu identidad antes de eliminar la cuenta.",
+        );
+        return;
+      }
+
+      setMessage("No pudimos eliminar tu cuenta. Inténtalo nuevamente.");
     } finally {
       setDeleting(false);
     }
@@ -636,6 +649,11 @@ export default function Profile() {
           </div>
         </section>
       </div>
+      <ReAuthModal
+        isOpen={showReAuthModal}
+        onClose={() => setShowReAuthModal(false)}
+        onSuccess={executeDeleteAccount}
+      />
     </main>
   );
 }
