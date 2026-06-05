@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   BookOpen,
-  Calendar,
   Clock,
   Loader2,
   LogOut,
@@ -323,8 +322,7 @@ export default function Profile() {
   };
 
   const displayName = profile?.name || "Usuario sin nombre";
-  const displayUsername =
-    profile?.originalUsername || profile?.username || "sin_usuario";
+  
   const initials = displayName
     .split(" ")
     .slice(0, 2)

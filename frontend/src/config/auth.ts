@@ -15,13 +15,8 @@ import {
   doc,
   setDoc,
   serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs,
   updateDoc,
   getDoc,
-  deleteDoc,
   writeBatch,
 } from "firebase/firestore";
 
