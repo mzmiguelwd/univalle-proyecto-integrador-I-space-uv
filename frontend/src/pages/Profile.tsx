@@ -64,6 +64,8 @@ export default function Profile() {
   const usernameTimeoutRef = useRef<number | null>(null);
   const lastCheckedUsernameRef = useRef("");
   const [showReAuthModal, setShowReAuthModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -241,18 +243,20 @@ export default function Profile() {
     }
 
     await deleteUserAccount(auth.currentUser.uid);
+    setDeleteConfirmation("");
+    setShowDeleteModal(false);
     navigate("/register");
   };
 
   const handleDeleteAccount = async () => {
-    const confirmDelete = window.confirm(
-      "¿Seguro que quieres eliminar tu cuenta? Esta acción no se puede deshacer.",
-    );
-
-    if (!confirmDelete) return;
+    if (deleteConfirmation !== "ELIMINAR") {
+      setMessage("Debes escribir ELIMINAR para confirmar la eliminación.");
+      return;
+    }
 
     try {
       setDeleting(true);
+      setShowDeleteModal(false);
       await executeDeleteAccount();
     } catch (error: any) {
       console.error(error);
@@ -685,7 +689,7 @@ export default function Profile() {
                 <button
                   type="button"
                   disabled={deleting}
-                  onClick={handleDeleteAccount}
+                  onClick={() => setShowDeleteModal(true)}
                   className="flex items-center justify-center gap-2 rounded-md border border-amber-400/60 px-5 py-3 text-sm font-bold text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-60"
                 >
                   {deleting ? (
@@ -733,6 +737,72 @@ export default function Profile() {
           </div>
         </section>
       </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-[#202020] p-6 text-white shadow-2xl">
+            <div className="mb-5">
+              <h2 className="text-xl font-bold text-red-200">
+                Eliminar cuenta
+              </h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Esta acción es permanente. Se eliminará tu perfil, tu nombre de
+                usuario reservado y tu cuenta de autenticación.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-100">
+              <p className="font-semibold">Antes de continuar:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>No podrás recuperar tu cuenta después de eliminarla.</li>
+                <li>Tu username quedará liberado para otros usuarios.</li>
+                <li>Se cerrará tu sesión automáticamente.</li>
+              </ul>
+            </div>
+
+            <div className="mt-5">
+              <label className="mb-2 block text-xs font-semibold text-red-200">
+                Escribe ELIMINAR para confirmar
+              </label>
+              <input
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                className="w-full rounded-md border border-white/5 bg-[#181818] px-4 py-3 text-sm outline-none transition focus:border-red-300"
+                placeholder="ELIMINAR"
+              />
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmation("");
+                }}
+                className="flex-1 rounded-md border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={deleting || deleteConfirmation !== "ELIMINAR"}
+                onClick={handleDeleteAccount}
+                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Eliminar definitivamente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ReAuthModal
         isOpen={showReAuthModal}
         onClose={() => setShowReAuthModal(false)}
