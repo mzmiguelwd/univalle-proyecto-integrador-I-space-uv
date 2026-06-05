@@ -238,14 +238,35 @@ export default function Profile() {
 
   const executeDeleteAccount = async () => {
     if (!auth.currentUser) {
-      navigate("/login");
+      navigate("/");
       return;
     }
 
     await deleteUserAccount(auth.currentUser.uid);
+
+    setProfile(null);
+    setFormData({
+      name: "",
+      username: "",
+      bio: "",
+      studyArea: "",
+      university: "",
+      program: "",
+      interests: "",
+      availability: "",
+      notificationsEnabled: true,
+      studyMode: "Deep Work",
+      visibleStatus: true,
+      dailyGoalHours: 6,
+    });
+
+    setErrors({});
+    setMessage("");
     setDeleteConfirmation("");
     setShowDeleteModal(false);
-    navigate("/register");
+    setShowReAuthModal(false);
+
+    window.location.href = "/";
   };
 
   const handleDeleteAccount = async () => {
