@@ -383,7 +383,11 @@ export default function Profile() {
           </div>
 
           {message && (
-            <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-zinc-100">
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-6 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-zinc-100"
+            >
               <AlertCircle className="h-4 w-4 text-sky-300" />
               <span>{message}</span>
             </div>
@@ -451,6 +455,8 @@ export default function Profile() {
                         error={errors.username}
                       />
 
+                      <div role="status" aria-live="polite">
+
                       {!errors.username && usernameStatus === "checking" && (
                         <p className="mt-1 text-xs text-zinc-400">
                           Verificando disponibilidad...
@@ -468,6 +474,7 @@ export default function Profile() {
                           Este nombre de usuario ya está en uso.
                         </p>
                       )}
+                      </div>
                     </div>
 
                     <ProfileInput
