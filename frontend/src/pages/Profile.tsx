@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Loader2, Save, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  BookOpen,
+  Calendar,
+  Clock,
+  Loader2,
+  LogOut,
+  Save,
+  Trash2,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { auth } from "../config/firebase";
+import { logoutUser } from "../config/auth";
 import {
   deleteUserAccount,
   getUserProfile,
@@ -12,6 +24,13 @@ import {
 
 type FormErrors = Partial<Record<keyof UpdateUserProfileData, string>>;
 
+const navItems = [
+  { label: "Inicio", icon: BookOpen },
+  { label: "Mis sesiones", icon: Clock },
+  { label: "Comunidad", icon: Users },
+  { label: "Mi perfil", icon: UserRound, active: true },
+];
+
 export default function Profile() {
   const navigate = useNavigate();
 
@@ -21,6 +40,14 @@ export default function Profile() {
     username: "",
     bio: "",
     studyArea: "",
+    university: "",
+    program: "",
+    interests: "",
+    availability: "",
+    notificationsEnabled: true,
+    studyMode: "Deep Work",
+    visibleStatus: true,
+    dailyGoalHours: 6,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -53,6 +80,14 @@ export default function Profile() {
           username: data.username || "",
           bio: data.bio || "",
           studyArea: data.studyArea || "",
+          university: data.university || "Universidad del Valle",
+          program: data.program || "",
+          interests: data.interests || "",
+          availability: data.availability || "",
+          notificationsEnabled: data.notificationsEnabled ?? true,
+          studyMode: data.studyMode || "Deep Work",
+          visibleStatus: data.visibleStatus ?? true,
+          dailyGoalHours: data.dailyGoalHours ?? 6,
         });
       } catch (error) {
         console.error(error);
@@ -73,6 +108,31 @@ export default function Profile() {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: undefined,
+    }));
+
+    setMessage("");
+  };
+
+  const handleBooleanChange = (name: "notificationsEnabled" | "visibleStatus") => {
+  setFormData((prev) => ({
+    ...prev,
+    [name]: !prev[name],
+  }));
+
+  setMessage("");
+};
+
+  const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: Number(value),
     }));
 
     setErrors((prev) => ({
@@ -143,226 +203,529 @@ export default function Profile() {
     }
   };
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </main>
-    );
-  }
-
   const handleCancelEdit = () => {
     if (!profile) return;
 
     setFormData({
-        name: profile.name || "",
-        username: profile.username || "",
-        bio: profile.bio || "",
-        studyArea: profile.studyArea || "",
+      name: profile.name || "",
+      username: profile.username || "",
+      bio: profile.bio || "",
+      studyArea: profile.studyArea || "",
+      university: profile.university || "Universidad del Valle",
+      program: profile.program || "",
+      interests: profile.interests || "",
+      availability: profile.availability || "",
+      notificationsEnabled: profile.notificationsEnabled ?? true,
+      studyMode: profile.studyMode || "Deep Work",
+      visibleStatus: profile.visibleStatus ?? true,
+      dailyGoalHours: profile.dailyGoalHours ?? 6,
     });
 
     setErrors({});
     setMessage("");
     setIsEditing(false);
-    };
+  };
+
+  const displayName = profile?.name || "Usuario sin nombre";
+  const displayUsername =
+    profile?.originalUsername || profile?.username || "sin_usuario";
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((word) => word.charAt(0))
+    .join("")
+    .toUpperCase();
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#0f0f10] text-white">
+        <Loader2 className="h-8 w-8 animate-spin text-sky-300" />
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-      <section className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl">
-        <div className="mb-8 flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 text-2xl font-bold text-indigo-200">
-                {(profile?.name || profile?.username || "U").charAt(0).toUpperCase()}
-            </div>
-
+    <main className="min-h-screen bg-[#0f0f10] text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl">
+        <aside className="hidden w-72 flex-col justify-between border-r border-white/5 bg-[#161617] px-6 py-8 lg:flex">
+          <div>
             <div>
-                <h1 className="text-2xl font-bold">
-                {profile?.name || "Usuario sin nombre"}
-                </h1>
-                <p className="text-sm text-indigo-300">
-                @{profile?.originalUsername || profile?.username || "sin_usuario"}
-                </p>
-                <p className="mt-1 text-sm text-slate-400">
-                {profile?.email}
-                </p>
-            </div>
+              <h2 className="text-lg font-bold text-sky-200">
+                EstudioSíncrono
+              </h2>
+              <p className="text-xs text-zinc-500">Deep Work Mode</p>
             </div>
 
-            {!isEditing && (
+            <nav className="mt-12 space-y-3">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => item.label === "Inicio" && navigate("/dashboard")}
+                    className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm transition ${
+                      item.active
+                        ? "bg-sky-900/60 text-sky-100"
+                        : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="space-y-6">
             <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-400"
+              type="button"
+              className="flex w-full items-center justify-center rounded-lg bg-sky-300 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-sky-200"
             >
-                Editar perfil
+              + Iniciar nueva sesión
             </button>
-            )}
-        </div>
 
-        {message && (
-            <div className="mb-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-3 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            <span>{message}</span>
+            <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-sky-300 text-sm font-bold text-zinc-950">
+                {initials}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{displayName}</p>
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                  {profile?.role || "Student"}
+                </p>
+              </div>
             </div>
-        )}
+          </div>
+        </aside>
 
-        {!isEditing ? (
+        <section className="flex-1 px-5 py-8 md:px-10 lg:px-14">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-sky-200">
+              Perfil del estudiante
+            </h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              Gestiona tu información, preferencias de estudio y actividad
+              reciente.
+            </p>
+          </div>
+
+          {message && (
+            <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-zinc-100">
+              <AlertCircle className="h-4 w-4 text-sky-300" />
+              <span>{message}</span>
+            </div>
+          )}
+
+          <div className="grid gap-8 xl:grid-cols-[1fr_320px]">
             <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">
-                    Nombre
-                </p>
-                <p className="mt-1 font-semibold">
-                    {profile?.name || "No configurado"}
-                </p>
+              <article className="rounded-lg bg-[#202020] p-6 shadow-xl">
+                <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-5">
+                    <div className="flex h-24 w-24 items-center justify-center rounded-lg bg-sky-300 text-3xl font-bold text-zinc-950">
+                      {initials}
+                    </div>
+
+                    <div>
+                      <h2 className="text-2xl font-bold text-sky-200">
+                        {displayName}
+                      </h2>
+                      <p className="text-sm text-zinc-300">{profile?.email}</p>
+                      <p className="text-sm text-zinc-400">
+                        {profile?.studyArea || "Área de estudio no configurada"}
+                      </p>
+
+                      <div className="mt-3 inline-flex items-center gap-2 rounded-md bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                        <span className="h-2 w-2 rounded-full bg-amber-300" />
+                        En línea
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing((prev) => !prev)}
+                    className="rounded border border-zinc-500 px-6 py-3 text-sm font-semibold text-white transition hover:border-sky-300 hover:text-sky-200"
+                  >
+                    {isEditing ? "Ver perfil" : "Editar perfil"}
+                  </button>
                 </div>
+              </article>
 
-                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">
-                    Usuario
-                </p>
-                <p className="mt-1 font-semibold">
-                    @{profile?.originalUsername || profile?.username || "No configurado"}
-                </p>
-                </div>
+              {isEditing ? (
+                <form
+                  onSubmit={handleSave}
+                  className="rounded-lg bg-[#202020] p-6 shadow-xl"
+                >
+                  <h3 className="mb-5 text-lg font-bold">
+                    Editar información del perfil
+                  </h3>
 
-                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">
-                    Área de estudio
-                </p>
-                <p className="mt-1 font-semibold">
-                    {profile?.studyArea || "No configurada"}
-                </p>
-                </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <ProfileInput
+                      label="Nombre"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      error={errors.name}
+                    />
 
-                <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">
-                    Rol
-                </p>
-                <p className="mt-1 font-semibold">
-                    {profile?.role || "student"}
-                </p>
-                </div>
-            </div>
+                    <ProfileInput
+                      label="Usuario"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      error={errors.username}
+                    />
 
-            <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">
-                Biografía
-                </p>
-                <p className="mt-2 text-slate-200">
-                {profile?.bio || "Aún no has agregado una biografía."}
-                </p>
-            </div>
+                    <ProfileInput
+                      label="Área de estudio"
+                      name="studyArea"
+                      value={formData.studyArea || ""}
+                      onChange={handleChange}
+                      error={errors.studyArea}
+                    />
+                    <ProfileInput
+                      label="Universidad"
+                      name="university"
+                      value={formData.university || ""}
+                      onChange={handleChange}
+                      error={errors.university}
+                    />
 
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-                <h2 className="font-semibold text-red-200">Zona de peligro</h2>
-                <p className="mt-1 text-sm text-red-100/70">
-                Esta acción eliminará tu perfil y tu cuenta de autenticación.
-                </p>
+                    <ProfileInput
+                      label="Programa"
+                      name="program"
+                      value={formData.program || ""}
+                      onChange={handleChange}
+                      error={errors.program}
+                    />
+
+                    <ProfileInput
+                      label="Intereses"
+                      name="interests"
+                      value={formData.interests || ""}
+                      onChange={handleChange}
+                      error={errors.interests}
+                    />
+
+                    <ProfileInput
+                      label="Disponibilidad"
+                      name="availability"
+                      value={formData.availability || ""}
+                      onChange={handleChange}
+                      error={errors.availability}
+                    />
+
+                    <ProfileInput
+                      label="Modo de estudio"
+                      name="studyMode"
+                      value={formData.studyMode || ""}
+                      onChange={handleChange}
+                      error={errors.studyMode}
+                    />
+
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold text-sky-300">
+                        Meta diaria de estudio
+                      </label>
+                      <input
+                        name="dailyGoalHours"
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={formData.dailyGoalHours || 6}
+                        onChange={handleNumberChange}
+                        className="w-full rounded-md border border-white/5 bg-[#181818] px-4 py-3 text-sm outline-none transition focus:border-sky-300"
+                      />
+                      {errors.dailyGoalHours && (
+                        <p className="mt-1 text-xs text-red-300">{errors.dailyGoalHours}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-md border border-white/5 bg-[#181818] px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-sky-300">Notificaciones</p>
+                        <p className="text-xs text-zinc-500">
+                          Recibir avisos de actividad y sesiones.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleBooleanChange("notificationsEnabled")}
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          formData.notificationsEnabled
+                            ? "bg-sky-300 text-zinc-950"
+                            : "bg-zinc-700 text-zinc-300"
+                        }`}
+                      >
+                        {formData.notificationsEnabled ? "Activas" : "Inactivas"}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-md border border-white/5 bg-[#181818] px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-sky-300">Estado visible</p>
+                        <p className="text-xs text-zinc-500">
+                          Mostrar si estás disponible para estudiar.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleBooleanChange("visibleStatus")}
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          formData.visibleStatus
+                            ? "bg-sky-300 text-zinc-950"
+                            : "bg-zinc-700 text-zinc-300"
+                        }`}
+                      >
+                        {formData.visibleStatus ? "Visible" : "Oculto"}
+                      </button>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="mb-2 block text-xs font-semibold text-sky-300">
+                        Biografía
+                      </label>
+                      <textarea
+                        name="bio"
+                        value={formData.bio}
+                        onChange={handleChange}
+                        rows={4}
+                        className="w-full resize-none rounded-md border border-white/5 bg-[#181818] px-4 py-3 text-sm outline-none transition focus:border-sky-300"
+                        placeholder="Cuéntanos algo sobre ti"
+                      />
+                      {errors.bio && (
+                        <p className="mt-1 text-xs text-red-300">
+                          {errors.bio}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex items-center justify-center gap-2 rounded-md bg-sky-300 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-sky-200 disabled:opacity-60"
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      Guardar cambios
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                      className="rounded-md border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <article className="rounded-lg bg-[#202020] p-6 shadow-xl">
+                    <h3 className="mb-5 text-lg font-bold">
+                      Información académica
+                    </h3>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <InfoTile
+                        label="Universidad"
+                        value={profile?.university || "Universidad del Valle"}
+                      />
+                      <InfoTile
+                        label="Programa"
+                        value={profile?.program || profile?.studyArea || "No configurado"}
+                      />
+                      <InfoTile
+                        label="Intereses"
+                        value={profile?.interests || profile?.bio || "No configurados"}
+                      />
+                      <InfoTile
+                        label="Disponibilidad"
+                        value={profile?.availability || "No configurada"}
+                      />
+                    </div>
+                  </article>
+
+                  <article className="rounded-lg bg-[#202020] p-6 shadow-xl">
+                    <h3 className="mb-5 text-lg font-bold">Salas recientes</h3>
+
+                    <div className="space-y-4">
+                      <RoomItem
+                        title="Cálculo Avanzado II"
+                        subtitle="Biblioteca Central · 5 personas"
+                        action="Entrar"
+                      />
+                      <RoomItem
+                        title="Taller de Tesis"
+                        subtitle="Sala Silenciosa · Hoy, 18:00"
+                        action="Ver detalles"
+                      />
+                    </div>
+                  </article>
+                </>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={logoutUser}
+                  className="flex items-center justify-center gap-2 rounded-md bg-sky-300 px-5 py-3 text-sm font-bold text-zinc-950 transition hover:bg-sky-200"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Cerrar sesión
+                </button>
 
                 <button
-                type="button"
-                disabled={deleting}
-                onClick={handleDeleteAccount}
-                className="mt-4 flex items-center gap-2 rounded-xl bg-red-500/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-400 disabled:opacity-60"
+                  type="button"
+                  disabled={deleting}
+                  onClick={handleDeleteAccount}
+                  className="flex items-center justify-center gap-2 rounded-md border border-amber-400/60 px-5 py-3 text-sm font-bold text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-60"
                 >
-                {deleting ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                    <Trash2 className="h-5 w-5" />
-                )}
-                Eliminar cuenta
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Eliminar cuenta
                 </button>
-            </div>
-            </div>
-        ) : (
-            <form onSubmit={handleSave} className="space-y-5">
-            <div>
-                <label className="mb-2 block text-sm font-medium">Nombre</label>
-                <input
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-                placeholder="Tu nombre"
-                />
-                {errors.name && (
-                <p className="mt-1 text-sm text-red-300">{errors.name}</p>
-                )}
+              </div>
             </div>
 
-            <div>
-                <label className="mb-2 block text-sm font-medium">Usuario</label>
-                <input
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-                placeholder="usuario"
-                />
-                {errors.username && (
-                <p className="mt-1 text-sm text-red-300">{errors.username}</p>
-                )}
-            </div>
+            <aside className="space-y-6">
+              <StatsCard
+                title="Resumen de actividad"
+                items={[
+                  ["Horas esta semana", "12 h"],
+                  ["Sesiones completadas", "8"],
+                  ["Salas creadas", "6"],
+                ]}
+              />
 
-            <div>
-                <label className="mb-2 block text-sm font-medium">Biografía</label>
-                <textarea
-                name="bio"
-                value={formData.bio}
-                onChange={handleChange}
-                rows={4}
-                className="w-full resize-none rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-                placeholder="Cuéntanos algo sobre ti"
-                />
-                {errors.bio && (
-                <p className="mt-1 text-sm text-red-300">{errors.bio}</p>
-                )}
-            </div>
+              <article className="rounded-lg bg-[#202020] p-6 shadow-xl">
+                <h3 className="font-bold">Meta diaria</h3>
+                <p className="mt-4 text-sm text-zinc-400">
+                  0 h / {profile?.dailyGoalHours || 6} h · 0% completado
+                </p>
+                <div className="mt-3 h-2 rounded-full bg-zinc-700">
+                  <div className="h-2 w-0 rounded-full bg-amber-400" />
+                </div>
+              </article>
 
-            <div>
-                <label className="mb-2 block text-sm font-medium">
-                Área de estudio
-                </label>
-                <input
-                name="studyArea"
-                value={formData.studyArea}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-indigo-400"
-                placeholder="Ej: Ingeniería de software"
-                />
-                {errors.studyArea && (
-                <p className="mt-1 text-sm text-red-300">{errors.studyArea}</p>
-                )}
-            </div>
-
-            <div className="flex flex-col gap-3 pt-4 sm:flex-row">
-                <button
-                type="submit"
-                disabled={saving}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 font-semibold text-white transition hover:bg-indigo-400 disabled:opacity-60"
-                >
-                {saving ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                    <Save className="h-5 w-5" />
-                )}
-                Guardar cambios
-                </button>
-
-                <button
-                type="button"
-                onClick={handleCancelEdit}
-                disabled={saving}
-                className="flex flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/10 px-4 py-3 font-semibold text-white transition hover:bg-white/20 disabled:opacity-60"
-                >
-                Cancelar
-                </button>
-            </div>
-            </form>
-        )}
+              <StatsCard
+                title="Preferencias"
+                items={[
+                  [
+                    "Notificaciones",
+                    profile?.notificationsEnabled ?? true ? "Activas" : "Inactivas",
+                  ],
+                  ["Modo de estudio", profile?.studyMode || "Deep Work"],
+                  ["Estado visible", profile?.visibleStatus ?? true ? "Sí" : "No"],
+                ]}
+              />
+            </aside>
+          </div>
         </section>
+      </div>
     </main>
+  );
+}
+
+type ProfileInputProps = {
+  label: string;
+  name: keyof UpdateUserProfileData;
+  value: string;
+  onChange: (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => void;
+  error?: string;
+};
+
+function ProfileInput({
+  label,
+  name,
+  value,
+  onChange,
+  error,
+}: ProfileInputProps) {
+  return (
+    <div>
+      <label className="mb-2 block text-xs font-semibold text-sky-300">
+        {label}
+      </label>
+      <input
+        name={name}
+        value={value}
+        onChange={onChange}
+        className="w-full rounded-md border border-white/5 bg-[#181818] px-4 py-3 text-sm outline-none transition focus:border-sky-300"
+      />
+      {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
+    </div>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-[#181818] p-4">
+      <p className="text-xs text-sky-300">{label}</p>
+      <p className="mt-1 text-sm text-zinc-200">{value}</p>
+    </div>
+  );
+}
+
+function RoomItem({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-semibold text-sky-300">{title}</p>
+        <p className="text-xs text-zinc-500">{subtitle}</p>
+      </div>
+      <button
+        type="button"
+        className="rounded border border-zinc-500 px-4 py-2 text-xs font-semibold text-white transition hover:border-sky-300 hover:text-sky-200"
+      >
+        {action}
+      </button>
+    </div>
+  );
+}
+
+function StatsCard({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<[string, string]>;
+}) {
+  return (
+    <article className="rounded-lg bg-[#202020] p-6 shadow-xl">
+      <h3 className="font-bold">{title}</h3>
+
+      <div className="mt-5 space-y-3">
+        {items.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between text-sm">
+            <span className="text-zinc-400">{label}</span>
+            <span className="font-semibold text-sky-300">{value}</span>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }

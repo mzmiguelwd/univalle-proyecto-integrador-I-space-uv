@@ -127,6 +127,14 @@ export type UserProfile = {
   createdAt?: unknown;
   lastLogin?: unknown;
   updatedAt?: unknown;
+  university?: string;
+  program?: string;
+  interests?: string;
+  availability?: string;
+  notificationsEnabled?: boolean;
+  studyMode?: string;
+  visibleStatus?: boolean;
+  dailyGoalHours?: number;
 };
 
 export type UpdateUserProfileData = {
@@ -134,6 +142,14 @@ export type UpdateUserProfileData = {
   username: string;
   bio?: string;
   studyArea?: string;
+  university?: string;
+  program?: string;
+  interests?: string;
+  availability?: string;
+  notificationsEnabled?: boolean;
+  studyMode?: string;
+  visibleStatus?: boolean;
+  dailyGoalHours?: number;
 };
 
 export const validateUserProfile = (data: UpdateUserProfileData) => {
@@ -143,6 +159,40 @@ export const validateUserProfile = (data: UpdateUserProfileData) => {
   const username = data.username.trim();
   const bio = data.bio?.trim() || "";
   const studyArea = data.studyArea?.trim() || "";
+  const university = data.university?.trim() || "";
+  const program = data.program?.trim() || "";
+  const interests = data.interests?.trim() || "";
+  const availability = data.availability?.trim() || "";
+  const studyMode = data.studyMode?.trim() || "";
+
+  if (university.length > 80) {
+    errors.university = "La universidad no puede superar los 80 caracteres.";
+  }
+
+  if (program.length > 80) {
+    errors.program = "El programa no puede superar los 80 caracteres.";
+  }
+
+  if (interests.length > 160) {
+    errors.interests = "Los intereses no pueden superar los 160 caracteres.";
+  }
+
+  if (availability.length > 80) {
+    errors.availability = "La disponibilidad no puede superar los 80 caracteres.";
+  }
+
+  if (studyMode.length > 40) {
+    errors.studyMode = "El modo de estudio no puede superar los 40 caracteres.";
+  }
+
+  if (
+    data.dailyGoalHours !== undefined &&
+    (Number.isNaN(data.dailyGoalHours) ||
+      data.dailyGoalHours < 1 ||
+      data.dailyGoalHours > 24)
+  ) {
+    errors.dailyGoalHours = "La meta diaria debe estar entre 1 y 24 horas.";
+  }
 
   if (name.length < 2) {
     errors.name = "El nombre debe tener al menos 2 caracteres.";
@@ -226,6 +276,14 @@ export const updateUserProfile = async (
     originalUsername: data.username.trim(),
     bio: data.bio?.trim() || "",
     studyArea: data.studyArea?.trim() || "",
+    university: data.university?.trim() || "",
+    program: data.program?.trim() || "",
+    interests: data.interests?.trim() || "",
+    availability: data.availability?.trim() || "",
+    notificationsEnabled: data.notificationsEnabled ?? true,
+    studyMode: data.studyMode?.trim() || "Deep Work",
+    visibleStatus: data.visibleStatus ?? true,
+    dailyGoalHours: data.dailyGoalHours ?? 6,
     updatedAt: serverTimestamp(),
   });
 
