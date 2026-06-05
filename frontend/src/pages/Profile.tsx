@@ -27,9 +27,11 @@ import FocusTrap from "../components/accessibility/FocusTrap";
 import RoomCard from "../components/rooms/RoomCard";
 import RoomsEmptyState from "../components/rooms/RoomsEmptyState";
 import {
-  getOwnStudyRooms,
+  
+  subscribeToOwnStudyRooms,
   type StudyRoom,
 } from "../config/rooms";
+
 
 type FormErrors = Partial<Record<keyof UpdateUserProfileData, string>>;
 
@@ -91,13 +93,7 @@ export default function Profile() {
 
         const data = await getUserProfile(currentUser.uid);
 
-        try {
-          const ownRooms = await getOwnStudyRooms(currentUser.uid);
-          setRooms(ownRooms);
-        } catch (roomsError) {
-          console.error("Error cargando salas:", roomsError);
-          setRooms([]);
-        }
+        
 
         if (!data) {
           navigate("/setup-profile");
@@ -130,6 +126,31 @@ export default function Profile() {
 
     loadProfile();
   }, [navigate]);
+
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      setRooms([]);
+      setIsLoadingRooms(false);
+      return;
+    }
+
+    const unsubscribe = subscribeToOwnStudyRooms(
+      currentUser.uid,
+      (updatedRooms) => {
+        setRooms(updatedRooms);
+        setIsLoadingRooms(false);
+      },
+      (error) => {
+        console.error("Error escuchando salas:", error);
+        setRooms([]);
+        setIsLoadingRooms(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (usernameTimeoutRef.current) {

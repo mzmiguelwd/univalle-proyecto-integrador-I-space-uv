@@ -7,6 +7,8 @@ import {
   serverTimestamp,
   where,
   type Timestamp,
+  onSnapshot,
+  type Unsubscribe,
 } from "firebase/firestore";
 
 import { db } from "./firebase";
@@ -89,4 +91,34 @@ export const getOwnStudyRooms = async (
     id: doc.id,
     ...(doc.data() as Omit<StudyRoom, "id">),
   }));
+};
+
+export const subscribeToOwnStudyRooms = (
+  ownerId: string,
+  onRoomsChange: (rooms: StudyRoom[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe => {
+  const roomsQuery = query(
+    collection(db, "rooms"),
+    where("ownerId", "==", ownerId),
+    where("isActive", "==", true),
+    orderBy("createdAt", "desc"),
+  );
+
+  return onSnapshot(
+    roomsQuery,
+    (roomsSnap) => {
+      const rooms = roomsSnap.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<StudyRoom, "id">),
+      }));
+
+      onRoomsChange(rooms);
+    },
+    (error) => {
+      if (onError) {
+        onError(error);
+      }
+    },
+  );
 };

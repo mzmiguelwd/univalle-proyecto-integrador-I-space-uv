@@ -13,7 +13,8 @@ import { useEffect, useState } from "react";
 import RoomCard from "../rooms/RoomCard";
 import RoomsEmptyState from "../rooms/RoomsEmptyState";
 import {
-  getOwnStudyRooms,
+  createStudyRoom,
+  subscribeToOwnStudyRooms,
   type StudyRoom,
 } from "../../config/rooms";
 
@@ -106,21 +107,29 @@ type Props = {
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
   useEffect(() => {
-    const loadRooms = async () => {
-      try {
-        if (!profile?.uid) return;
+    const currentUser = auth.currentUser;
 
-        const ownRooms = await getOwnStudyRooms(profile.uid);
-        setRooms(ownRooms);
-      } catch (error) {
-        console.error("Error cargando salas:", error);
-      } finally {
+    if (!currentUser) {
+      setRooms([]);
+      setIsLoadingRooms(false);
+      return;
+    }
+
+    const unsubscribe = subscribeToOwnStudyRooms(
+      currentUser.uid,
+      (updatedRooms) => {
+        setRooms(updatedRooms);
         setIsLoadingRooms(false);
-      }
-    };
+      },
+      (error) => {
+        console.error("Error escuchando salas:", error);
+        setRooms([]);
+        setIsLoadingRooms(false);
+      },
+    );
 
-    loadRooms();
-  }, [profile?.uid]);
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -130,6 +139,26 @@ type Props = {
       console.error("Error al cerrar sesión:", error);
     }
   };
+
+  const handleCreateRoom = async () => {
+    try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        navigate("/login");
+        return;
+      }
+
+      await createStudyRoom({
+        title: "Nueva sala de estudio",
+        topic: "Sesión de concentración",
+        ownerId: currentUser.uid,
+      });
+    } catch (error) {
+      console.error("Error creando sala:", error);
+    }
+  };
+
   return (
     <section
       aria-label="Panel de sesión de estudio"
@@ -225,14 +254,18 @@ type Props = {
               <p>Inicia una sesión ahora</p>
             </div>
 
-            <button className="rounded-lg
-                                bg-zinc-950
-                                px-6
-                                py-3
-                                font-semibold
-                                text-sky-300
-                                transition
-                                hover:bg-black">
+            <button
+              type="button"
+              onClick={handleCreateRoom}
+              className="rounded-lg
+                        bg-zinc-950
+                        px-6
+                        py-3
+                        font-semibold
+                        text-sky-300
+                        transition
+                        hover:bg-black"
+            >
               Iniciar ya!
             </button>
           </aside>
