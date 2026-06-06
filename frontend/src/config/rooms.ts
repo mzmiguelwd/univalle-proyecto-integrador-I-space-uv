@@ -9,6 +9,8 @@ import {
   type Timestamp,
   onSnapshot,
   type Unsubscribe,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "./firebase";
@@ -18,15 +20,17 @@ export type StudyRoom = {
   title: string;
   topic: string;
   ownerId: string;
+  type: string;
+  limit: number;
+  privacy: string;
   createdAt?: Timestamp;
   isActive: boolean;
 };
 
-export type CreateStudyRoomData = {
-  title: string;
-  topic: string;
-  ownerId: string;
-};
+export type CreateStudyRoomData = Omit<
+  StudyRoom,
+  "id" | "createdAt" | "isActive"
+>;
 
 export const validateStudyRoom = (data: CreateStudyRoomData) => {
   const errors: Partial<Record<keyof CreateStudyRoomData, string>> = {};
@@ -121,4 +125,23 @@ export const subscribeToOwnStudyRooms = (
       }
     },
   );
+};
+
+export const endStudyRoom = async (roomId: string) => {
+  const roomRef = doc(db, "rooms", roomId);
+  await updateDoc(roomRef, {
+    isActive: false,
+  });
+};
+
+export const updateStudyRoom = async (
+  roomId: string,
+  data: Partial<CreateStudyRoomData>,
+) => {
+  const roomRef = doc(db, "rooms", roomId);
+  // Aquí usamos updateDoc para modificar solo los campos que cambien
+  await updateDoc(roomRef, {
+    ...data,
+    updatedAt: serverTimestamp(), // Opcional: para saber cuándo se editó
+  });
 };

@@ -16,6 +16,8 @@ import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Profile from "./pages/Profile";
 import OldDashboard from "./pages/ProvisionalDashboard";
+import CreateRoom from "./pages/CreateRoom";
+import Room from "./pages/Room";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -147,11 +149,34 @@ function App() {
               isAllowed={Boolean(user) && hasUsername}
               redirectTo={!user ? "/login" : "/setup-profile"}
             >
-              <Dashboard/>
+              <Dashboard />
             </ProtectedRoute>
           }
         />
-        
+
+        <Route
+          path="/create-room"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <CreateRoom />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/room/:roomId"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <Room />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Redirección por defecto */}
         <Route
