@@ -12,13 +12,7 @@ import { auth } from "../../config/firebase";
 import { useEffect, useState } from "react";
 import RoomCard from "../rooms/RoomCard";
 import RoomsEmptyState from "../rooms/RoomsEmptyState";
-import {
-  createStudyRoom,
-  subscribeToOwnStudyRooms,
-  type StudyRoom,
-} from "../../config/rooms";
-
-
+import { subscribeToOwnStudyRooms, type StudyRoom } from "../../config/rooms";
 
 const recentActivity = [
   {
@@ -30,7 +24,8 @@ const recentActivity = [
       <p className="mt-[-1.00px] [font-family:'Hanken_Grotesk-Bold',Helvetica] font-normal text-transparent text-base leading-6 relative w-fit tracking-[0]">
         <span className="font-bold text-[#e5e2e1]">Marta G.</span>
         <span className="[font-family:'Hanken_Grotesk-Regular',Helvetica] text-[#e5e2e1]">
-          {" "}se unió a
+          {" "}
+          se unió a
         </span>
         <span className="font-bold text-[#e5e2e1]">
           <br />
@@ -70,7 +65,8 @@ const recentActivity = [
       <p className="relative w-fit mt-[-1.00px] [font-family:'Hanken_Grotesk-Bold',Helvetica] font-normal text-transparent text-base tracking-[0] leading-6">
         <span className="font-bold text-[#e5e2e1]">Luis P.</span>
         <span className="[font-family:'Hanken_Grotesk-Regular',Helvetica] text-[#e5e2e1]">
-          {" "}envió un mensaje <br />
+          {" "}
+          envió un mensaje <br />
           en{" "}
         </span>
         <span className="[font-family:'Hanken_Grotesk-SemiBold',Helvetica] font-semibold text-[#8ecdfd]">
@@ -88,7 +84,10 @@ const recentActivity = [
     content: (
       <p className="relative w-fit mt-[-1.00px] [font-family:'Hanken_Grotesk-Regular',Helvetica] font-normal text-[#e5e2e1] text-base tracking-[0] leading-6">
         ¡Has alcanzado tu{" "}
-        <span className="font-bold">meta <br /> diaria</span>!
+        <span className="font-bold">
+          meta <br /> diaria
+        </span>
+        !
       </p>
     ),
     time: "Ayer",
@@ -96,15 +95,14 @@ const recentActivity = [
 ];
 
 type Props = {
-    profile: UserProfile | null;
-  };
+  profile: UserProfile | null;
+};
 
-  export const StudySessionDashboardSection = ({
-    profile,
-  }: Props) => {
+export const StudySessionDashboardSection = ({ profile }: Props) => {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<StudyRoom[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+  const [roomIdToJoin, setRoomIdToJoin] = useState("");
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -149,11 +147,7 @@ type Props = {
         return;
       }
 
-      await createStudyRoom({
-        title: "Nueva sala de estudio",
-        topic: "Sesión de concentración",
-        ownerId: currentUser.uid,
-      });
+      navigate("/create-room");
     } catch (error) {
       console.error("Error creando sala:", error);
     }
@@ -202,9 +196,7 @@ type Props = {
           "
         >
           <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">
-            Cerrar sesión
-          </span>
+          <span className="hidden sm:inline">Cerrar sesión</span>
         </button>
       </header>
 
@@ -231,16 +223,15 @@ type Props = {
                 Cargando salas...
               </div>
             ) : rooms.length > 0 ? (
-              rooms.map((room) => (
-                <RoomCard key={room.id} room={room} />
-              ))
+              rooms.map((room) => <RoomCard key={room.id} room={room} />)
             ) : (
               <RoomsEmptyState />
             )}
           </div>
 
           {/* CTA */}
-          <aside className="rounded-lg
+          <aside
+            className="rounded-lg
                             bg-sky-300
                             p-6
                             flex
@@ -248,10 +239,11 @@ type Props = {
                             gap-4
                             md:flex-row
                             md:items-center
-                            md:justify-between">
+                            md:justify-between"
+          >
             <div>
-              <h3>¿Necesitas concentrarte ya?</h3>
-              <p>Inicia una sesión ahora</p>
+              <h3 className="font-bold text-lg text-sky-950">¿Necesitas concentrarte ya?</h3>
+              <p className="text-sky-900/80">Inicia una sesión ahora</p>
             </div>
 
             <button
@@ -269,6 +261,34 @@ type Props = {
               Iniciar ya!
             </button>
           </aside>
+
+          {/* JOIN BY ID */}
+          <div className="rounded-lg bg-[#202020] p-6 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-white font-semibold">¿Tienes un código de sala?</h3>
+              <p className="text-sm text-zinc-400">Únete a la sesión de un amigo ingresando su ID</p>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <input 
+                type="text" 
+                placeholder="ID de la sala" 
+                value={roomIdToJoin}
+                onChange={(e) => setRoomIdToJoin(e.target.value)}
+                className="bg-[#131313] border border-white/10 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-sky-400 flex-1 sm:w-48 transition-colors"
+              />
+              <button
+                onClick={() => {
+                  if (roomIdToJoin.trim()) {
+                    navigate(`/room/${roomIdToJoin.trim()}`);
+                  }
+                }}
+                disabled={!roomIdToJoin.trim()}
+                className="bg-sky-400 hover:bg-sky-500 disabled:opacity-50 disabled:hover:bg-sky-400 text-sky-950 font-semibold px-6 py-2 rounded-lg text-sm transition-colors"
+              >
+                Unirse
+              </button>
+            </div>
+          </div>
         </section>
 
         {/* ACTIVITY */}
