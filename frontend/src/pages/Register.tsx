@@ -1,19 +1,52 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { registerWithEmail, loginWithGoogle } from "../config/auth.ts";
+import { registerWithEmail, loginWithGoogle, checkUsernameAvailability } from "../config/auth.ts";
+
+// ── Avatares predefinidos ──────────────────────────────────────
+const AVATARS = [
+  { id: "owl",     emoji: "🦉", label: "Búho"       },
+  { id: "rocket",  emoji: "🚀", label: "Cohete"     },
+  { id: "brain",   emoji: "🧠", label: "Cerebro"    },
+  { id: "star",    emoji: "⭐", label: "Estrella"   },
+  { id: "fire",    emoji: "🔥", label: "Fuego"      },
+  { id: "diamond", emoji: "💎", label: "Diamante"   },
+  { id: "plant",   emoji: "🌱", label: "Planta"     },
+  { id: "bolt",    emoji: "⚡", label: "Rayo"       },
+  { id: "moon",    emoji: "🌙", label: "Luna"       },
+  { id: "book",    emoji: "📚", label: "Libros"     },
+  { id: "atom",    emoji: "⚛️",  label: "Átomo"      },
+  { id: "compass", emoji: "🧭", label: "Brújula"    },
+];
+
+// ── Dominios de correo aceptados ───────────────────────────────
+const VALID_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Todos los dominios son válidos — solo validamos formato.
+// Los correos institucionales (*.edu.co, etc.) pasan naturalmente.
 
 export default function RegisterPage() {
+  // Campos
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [acceptTerms, setAcceptTerms] = useState(false);
+
+  // Estados UI
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Estados username
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameError, setUsernameError] = useState("");
+
   const navigate = useNavigate();
 
+  // ── Fortaleza contraseña ───────────────────────────────────
   const getStrength = (pwd: string) => {
     let score = 0;
     if (pwd.length >= 8) score++;
@@ -30,6 +63,37 @@ export default function RegisterPage() {
   };
   const strength = getStrength(password);
 
+  // ── Validación username con debounce manual ────────────────
+  const handleUsernameChange = useCallback(async (value: string) => {
+    // Solo letras, números, guiones bajos — sin espacios
+    const clean = value.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+    setUsername(clean);
+    setUsernameAvailable(null);
+    setUsernameError("");
+
+    if (clean.length === 0) return;
+    if (clean.length < 3) {
+      setUsernameError("Mínimo 3 caracteres.");
+      return;
+    }
+    if (clean.length > 20) {
+      setUsernameError("Máximo 20 caracteres.");
+      return;
+    }
+
+    setUsernameChecking(true);
+    try {
+      const available = await checkUsernameAvailability(clean);
+      setUsernameAvailable(available);
+      if (!available) setUsernameError("Este usuario ya está en uso.");
+    } catch {
+      setUsernameError("No se pudo verificar. Intenta de nuevo.");
+    } finally {
+      setUsernameChecking(false);
+    }
+  }, []);
+
+  // ── Traducción errores Firebase ────────────────────────────
   const parseError = (err: any): string => {
     const code = err?.code || "";
     const map: Record<string, string> = {
@@ -41,17 +105,29 @@ export default function RegisterPage() {
     return map[code] || err?.message || "Ocurrió un error al crear la cuenta.";
   };
 
+  // ── Submit ─────────────────────────────────────────────────
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!name.trim())                 return setError("El nombre es obligatorio.");
-    if (!email.includes("@"))         return setError("Ingresa un correo válido.");
-    if (password.length < 6)          return setError("La contraseña debe tener al menos 6 caracteres.");
-    if (password !== confirmPassword)  return setError("Las contraseñas no coinciden.");
-    if (!acceptTerms)                 return setError("Debes aceptar los términos y condiciones.");
+
+    if (!name.trim())
+      return setError("El nombre completo es obligatorio.");
+    if (username.length < 3 || usernameAvailable !== true)
+      return setError("Elige un nombre de usuario válido y disponible.");
+    if (!VALID_EMAIL_REGEX.test(email))
+      return setError("Ingresa un correo electrónico válido.");
+    if (password.length < 6)
+      return setError("La contraseña debe tener al menos 6 caracteres.");
+    if (password !== confirmPassword)
+      return setError("Las contraseñas no coinciden.");
+    if (!selectedAvatar)
+      return setError("Selecciona un avatar para tu perfil.");
+    if (!acceptTerms)
+      return setError("Debes aceptar los términos y condiciones.");
+
     setIsLoading(true);
     try {
-      await registerWithEmail(email, password, name.trim());
+      await registerWithEmail(email, password, name.trim(), username, selectedAvatar);
       navigate("/dashboard");
     } catch (err: any) {
       setError(parseError(err));
@@ -66,7 +142,7 @@ export default function RegisterPage() {
     try {
       await loginWithGoogle();
       navigate("/dashboard");
-    } catch (err: any) {
+    } catch {
       setError("Ocurrió un error al registrarse con Google.");
       setIsLoading(false);
     }
@@ -92,16 +168,11 @@ export default function RegisterPage() {
       </div>
 
       {/* ── Panel derecho ── */}
-      {/*
-        móvil:   px-5 py-8       — padding cómodo en pantalla pequeña
-        tablet:  sm:px-8         — un poco más de aire
-        desktop: flex-1 centrado — ya lo manejaba antes
-      */}
       <div className="flex-1 flex items-start lg:items-center justify-center
                       px-5 py-8 sm:px-8 lg:px-12 overflow-y-auto">
         <div className="w-full max-w-md">
 
-          {/* Logo + hero móvil — imagen de fondo condensada */}
+          {/* Hero móvil */}
           <div className="lg:hidden relative rounded-2xl overflow-hidden mb-8 h-32 sm:h-40"
                style={{ backgroundImage: "url('/Study-focus.jpeg')", backgroundSize: "cover", backgroundPosition: "center" }}>
             <div className="absolute inset-0 bg-[#0d0f14]/60" />
@@ -112,7 +183,6 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Encabezado */}
           <div className="mb-6 sm:mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">Crear una cuenta</h2>
             <p className="text-white/50 text-sm">Únete a la comunidad de estudio profundo.</p>
@@ -120,6 +190,7 @@ export default function RegisterPage() {
 
           <form onSubmit={handleRegister} className="space-y-4 sm:space-y-5" noValidate>
 
+            {/* Error global */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3
                               text-red-400 text-sm flex items-start gap-2">
@@ -131,24 +202,95 @@ export default function RegisterPage() {
               </div>
             )}
 
+            {/* Nombre completo */}
             <Field label="Nombre completo">
               <input type="text" value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Tu nombre" autoComplete="name" className={inputClass} />
             </Field>
 
-            <Field label="Correo electrónico">
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="correo@ejemplo.com" autoComplete="email" className={inputClass} />
+            {/* Username */}
+            <Field label="Nombre de usuario">
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm select-none">
+                  @
+                </span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => handleUsernameChange(e.target.value)}
+                  placeholder="tu_usuario"
+                  maxLength={20}
+                  autoComplete="off"
+                  className={`${inputClass} pl-8 pr-11 ${
+                    usernameAvailable === false
+                      ? "border-red-500/50 focus:border-red-500/70 focus:ring-red-500/20"
+                      : usernameAvailable === true
+                        ? "border-green-500/50 focus:border-green-500/70 focus:ring-green-500/20"
+                        : ""
+                  }`}
+                />
+                {/* Ícono de estado */}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  {usernameChecking && (
+                    <svg className="animate-spin w-4 h-4 text-[#5ab4e8]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  )}
+                  {!usernameChecking && usernameAvailable === true && (
+                    <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  {!usernameChecking && usernameAvailable === false && (
+                    <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              {/* Feedback username */}
+              {usernameError && (
+                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                  <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                  {usernameError}
+                </p>
+              )}
+              {usernameAvailable && !usernameError && (
+                <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
+                  <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  ¡Disponible!
+                </p>
+              )}
+              <p className="text-[10px] text-white/25 mt-1">
+                Solo letras, números y guiones bajos. Sin espacios.
+              </p>
             </Field>
 
+            {/* Email — acepta cualquier dominio incluyendo institucionales */}
+            <Field label="Correo electrónico">
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@ejemplo.com o usuario@correounivalle.edu.co"
+                autoComplete="email" className={inputClass} />
+              <p className="text-[10px] text-white/25 mt-1">
+                Se aceptan correos institucionales (.edu.co, .edu, etc.)
+              </p>
+            </Field>
+
+            {/* Contraseña */}
             <Field label="Contraseña">
               <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"} value={password}
+                <input type={showPassword ? "text" : "password"} value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" autoComplete="new-password"
-                  className={`${inputClass} pr-11`}
-                />
+                  className={`${inputClass} pr-11`} />
                 <EyeToggle show={showPassword} onToggle={() => setShowPassword(!showPassword)} />
               </div>
               {password.length > 0 && (
@@ -164,10 +306,10 @@ export default function RegisterPage() {
               )}
             </Field>
 
+            {/* Confirmar contraseña */}
             <Field label="Confirmar contraseña">
               <div className="relative">
-                <input
-                  type={showConfirm ? "text" : "password"} value={confirmPassword}
+                <input type={showConfirm ? "text" : "password"} value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••" autoComplete="new-password"
                   className={`${inputClass} pr-11 ${
@@ -175,8 +317,7 @@ export default function RegisterPage() {
                       ? confirmPassword === password
                         ? "border-green-500/50 focus:border-green-500/70"
                         : "border-red-500/40 focus:border-red-500/60"
-                      : ""}`}
-                />
+                      : ""}`} />
                 <EyeToggle show={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} />
               </div>
               {confirmPassword.length > 0 && confirmPassword !== password && (
@@ -184,7 +325,39 @@ export default function RegisterPage() {
               )}
             </Field>
 
-            {/* Términos — área de toque más grande en móvil */}
+            {/* ── Selector de avatar ── */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-semibold tracking-[0.15em] text-white/50 uppercase">
+                Elige tu avatar
+              </label>
+              <div className="grid grid-cols-6 gap-2">
+                {AVATARS.map((av) => (
+                  <button
+                    key={av.id}
+                    type="button"
+                    onClick={() => setSelectedAvatar(av.id)}
+                    title={av.label}
+                    className={`aspect-square rounded-xl text-2xl flex items-center justify-center
+                                transition-all duration-150 border-2
+                                ${selectedAvatar === av.id
+                                  ? "border-[#5ab4e8] bg-[#5ab4e8]/15 scale-110 shadow-lg shadow-[#5ab4e8]/20"
+                                  : "border-white/10 bg-[#1a1d24] hover:border-white/25 hover:bg-white/5"
+                                }`}
+                    aria-label={av.label}
+                    aria-pressed={selectedAvatar === av.id}
+                  >
+                    {av.emoji}
+                  </button>
+                ))}
+              </div>
+              {selectedAvatar && (
+                <p className="text-xs text-white/30">
+                  Seleccionado: {AVATARS.find(a => a.id === selectedAvatar)?.label}
+                </p>
+              )}
+            </div>
+
+            {/* Términos */}
             <label className="flex items-start gap-3 cursor-pointer group py-1">
               <div className="relative mt-0.5 shrink-0">
                 <input type="checkbox" checked={acceptTerms}
@@ -208,7 +381,7 @@ export default function RegisterPage() {
               </span>
             </label>
 
-            {/* Botón submit — más alto en móvil para fácil toque */}
+            {/* Submit */}
             <button type="submit" disabled={isLoading}
               className="w-full bg-[#5ab4e8] hover:bg-[#4aa8de] active:bg-[#3a98ce]
                          disabled:opacity-50 disabled:cursor-not-allowed
@@ -233,6 +406,7 @@ export default function RegisterPage() {
               )}
             </button>
 
+            {/* Divisor */}
             <div className="relative my-1">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-white/10" />
@@ -244,6 +418,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            {/* Google */}
             <button type="button" onClick={handleGoogleRegister} disabled={isLoading}
               className="w-full bg-transparent border border-white/15 hover:border-white/30
                          hover:bg-white/5 active:bg-white/10
@@ -273,7 +448,7 @@ export default function RegisterPage() {
 // ── Helpers ────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full bg-[#1a1d24] border border-white/10 rounded-lg px-4 py-3 sm:py-3 text-white text-base sm:text-sm placeholder-white/25 focus:outline-none focus:border-[#5ab4e8]/60 focus:ring-1 focus:ring-[#5ab4e8]/20 transition-all";
+  "w-full bg-[#1a1d24] border border-white/10 rounded-lg px-4 py-3 text-white text-base sm:text-sm placeholder-white/25 focus:outline-none focus:border-[#5ab4e8]/60 focus:ring-1 focus:ring-[#5ab4e8]/20 transition-all";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -289,8 +464,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function EyeToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
   return (
     <button type="button" onClick={onToggle}
-      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60
-                 transition-colors p-1" // p-1 aumenta el área de toque
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors p-1"
       aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}>
       {show ? (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
