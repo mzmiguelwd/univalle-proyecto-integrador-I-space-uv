@@ -1,7 +1,6 @@
 import { Navigate } from "react-router-dom";
 import type { ReactNode } from "react";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface ProtectedRouteProps {
   isAllowed: boolean;
   redirectTo: string;
@@ -12,11 +11,10 @@ export default function ProtectedRoute({
   isAllowed,
   redirectTo,
   children,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-}: any) {
+}: ProtectedRouteProps) {
   if (!isAllowed) {
     return <Navigate to={redirectTo} replace />;
   }
 
-  return children;
+  return <>{children}</>;
 }

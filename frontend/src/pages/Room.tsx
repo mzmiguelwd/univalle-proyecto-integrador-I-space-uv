@@ -10,10 +10,8 @@ import {
   VideoOff,
   MonitorUp,
   MessageSquare,
-  MoreVertical,
   Send,
   Users,
-  Maximize2,
   PhoneOff,
   AlertTriangle,
   Copy,
@@ -147,7 +145,7 @@ export default function Room() {
         setIsScreenSharing(true);
         setScreenStream(stream);
 
-        // Usamos un pequeño timeout o effect para asegurar que el ref ya exista 
+        // Usamos un pequeño timeout o effect para asegurar que el ref ya exista
         // cuando inyectamos el stream ya que usamos renderizado condicional con el video
         setTimeout(() => {
           if (screenVideoRef.current) {
