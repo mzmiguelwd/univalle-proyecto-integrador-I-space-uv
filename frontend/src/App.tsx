@@ -14,6 +14,10 @@ import SetupProfile from "./pages/SetupProfile";
 import LandingPage from "./pages/LandingPage";
 import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import Profile from "./pages/Profile";
+import OldDashboard from "./pages/ProvisionalDashboard";
+import CreateRoom from "./pages/CreateRoom";
+import Room from "./pages/Room";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -69,6 +73,17 @@ function App() {
                 replace
               />
             )
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <Profile />
+            </ProtectedRoute>
           }
         />
 
@@ -134,7 +149,31 @@ function App() {
               isAllowed={Boolean(user) && hasUsername}
               redirectTo={!user ? "/login" : "/setup-profile"}
             >
-              <Dashboard user={user as User} />
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/create-room"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <CreateRoom />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/room/:roomId"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <Room />
             </ProtectedRoute>
           }
         />
@@ -153,6 +192,18 @@ function App() {
               }
               replace
             />
+          }
+        />
+        {/* Ruta Protegida Definitiva */}
+        <Route
+          path="/dashboard-old"
+          element={
+            <ProtectedRoute
+              isAllowed={Boolean(user) && hasUsername}
+              redirectTo={!user ? "/login" : "/setup-profile"}
+            >
+              <OldDashboard user={user as User} />
+            </ProtectedRoute>
           }
         />
       </Routes>
