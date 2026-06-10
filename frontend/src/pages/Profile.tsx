@@ -2,14 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
-  BookOpen,
-  Clock,
   Loader2,
   LogOut,
   Save,
   Trash2,
-  UserRound,
-  Users,
 } from "lucide-react";
 import { auth } from "../config/firebase";
 import { logoutUser } from "../config/auth";
@@ -26,6 +22,7 @@ import FocusTrap from "../components/accessibility/FocusTrap";
 import RoomCard from "../components/rooms/RoomCard";
 import RoomsEmptyState from "../components/rooms/RoomsEmptyState";
 import { subscribeToOwnStudyRooms, type StudyRoom } from "../config/rooms";
+import NavigationSidebar from "../components/layout/NavigationSidebar";
 
 // ── Avatares emoji (mismos que en RegisterPage) ───────────────
 const AVATARS = [
@@ -44,13 +41,6 @@ const AVATARS = [
 ];
 
 type FormErrors = Partial<Record<keyof UpdateUserProfileData, string>>;
-
-const navItems = [
-  { label: "Inicio",      icon: BookOpen  },
-  { label: "Mis sesiones",icon: Clock     },
-  { label: "Comunidad",   icon: Users     },
-  { label: "Mi perfil",   icon: UserRound, active: true },
-];
 
 // ── Helper: renderiza el avatar según su tipo ─────────────────
 function AvatarDisplay({
@@ -345,49 +335,13 @@ export default function Profile() {
 
   return (
     <main className="min-h-screen bg-[#0f0f10] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl">
+      <div className="mx-auto flex min-h-screen w-full">
 
         {/* ── Sidebar ── */}
-        <aside className="hidden w-72 flex-col justify-between border-r border-white/5 bg-[#161617] px-6 py-8 lg:flex">
-          <div>
-            <div>
-              <h2 className="text-lg font-bold text-sky-200">EstudioSíncrono</h2>
-              <p className="text-xs text-zinc-500">Deep Work Mode</p>
-            </div>
-            <nav className="mt-12 space-y-3">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button key={item.label} type="button"
-                    onClick={() => item.label === "Inicio" && navigate("/dashboard")}
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm transition ${
-                      item.active ? "bg-sky-900/60 text-sky-100" : "text-zinc-400 hover:bg-white/5 hover:text-white"
-                    }`}>
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="space-y-6">
-            <button type="button"
-              className="flex w-full items-center justify-center rounded-lg bg-sky-300 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-sky-200">
-              + Iniciar nueva sesión
-            </button>
-            {/* Avatar en sidebar */}
-            <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-              <AvatarDisplay profile={profile} size="sm" initials={initials} />
-              <div>
-                <p className="text-sm font-medium">{displayName}</p>
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-                  {profile?.role || "Student"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <NavigationSidebar
+          activePage="Mi perfil"
+          profile={profile}
+        />
 
         {/* ── Contenido principal ── */}
         <section className="flex-1 px-5 py-8 md:px-10 lg:px-14">
