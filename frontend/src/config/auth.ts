@@ -268,7 +268,12 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   const userRef = doc(db, "users", uid);
   const userSnap = await getDoc(userRef);
   if (!userSnap.exists()) return null;
-  return userSnap.data() as UserProfile;
+
+  const data = userSnap.data();
+  return {
+    uid,
+    ...(data as Omit<UserProfile, "uid">),
+  };
 };
 
 export const updateUserProfile = async (

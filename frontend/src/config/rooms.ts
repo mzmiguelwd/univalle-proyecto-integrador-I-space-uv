@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   getDocs,
+  getDoc,
   orderBy,
   query,
   serverTimestamp,
@@ -31,6 +32,20 @@ export type CreateStudyRoomData = Omit<
   StudyRoom,
   "id" | "createdAt" | "isActive"
 >;
+
+export const getRoomById = async (roomId: string): Promise<StudyRoom | null> => {
+  const roomRef = doc(db, "rooms", roomId);
+  const roomSnap = await getDoc(roomRef);
+ 
+  if (!roomSnap.exists()) return null;
+ 
+  const data = roomSnap.data() as Omit<StudyRoom, "id">;
+
+  // Sala encontrada pero ya no está activa
+  if (!data.isActive) return null;
+ 
+  return { id: roomSnap.id, ...data };
+};
 
 export const validateStudyRoom = (data: CreateStudyRoomData) => {
   const errors: Partial<Record<keyof CreateStudyRoomData, string>> = {};

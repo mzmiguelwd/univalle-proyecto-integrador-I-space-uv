@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { endStudyRoom } from "../config/rooms";
+import { getUserProfile, type UserProfile } from "../config/auth";
 import ChatHistory from "../components/rooms/ChatHistory";
 import {
   Mic,
@@ -20,24 +21,209 @@ import {
 } from "lucide-react";
 import { useWebRTC } from "../hooks/useWebRTC";
 
+// ── Avatares emoji (igual que en RegisterPage) ────────────────
+const AVATARS: Record<string, string> = {
+  owl: "🦉", rocket: "🚀", brain: "🧠", star: "⭐",
+  fire: "🔥", diamond: "💎", plant: "🌱", bolt: "⚡",
+  moon: "🌙", book: "📚", atom: "⚛️", compass: "🧭",
+};
+
+// ── Helper: renderiza avatar de un participante ───────────────
+function ParticipantAvatar({
+  name,
+  avatar,
+  size = 12,
+}: {
+  name: string;
+  avatar?: string | null;
+  size?: number;
+}) {
+  const cls = `h-${size} w-${size} rounded-full object-cover`;
+
+  // URL de Google
+  if (avatar && avatar.startsWith("http")) {
+    return <img src={avatar} alt={name} className={cls} />;
+  }
+  // ID de emoji
+  if (avatar && AVATARS[avatar]) {
+    return (
+      <div className={`h-${size} w-${size} rounded-full bg-slate-700 flex items-center justify-center text-2xl`}>
+        {AVATARS[avatar]}
+      </div>
+    );
+  }
+  // Fallback: inicial
+  return (
+    <div className={`h-${size} w-${size} rounded-full bg-sky-700 flex items-center justify-center font-bold text-white text-lg`}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 export default function Room() {
   const { roomId } = useParams();
-  const navigate = useNavigate();
+  const navigate   = useNavigate();
 
-  // 1. Estado para almacenar tu propio MediaStream local
-  const [myStream, setMyStream] = useState<MediaStream | null>(null);
-
+  const [myStream,     setMyStream]     = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [profile,      setProfile]      = useState<UserProfile | null>(null);
 
-  // 2. Le pasamos el stream de cámara y pantalla al hook.
-  // Esto hará la conexión automática con Socket.io y WebRTC
-  const { remoteStreams } = useWebRTC(roomId!, myStream, screenStream);
-
-  const [isMicrophoneOn, setIsMicrophoneOn] = useState(false);
-  const [isCameraOn, setIsCameraOn] = useState(false);
-  const [message, setMessage] = useState("");
+  const [isMicrophoneOn,  setIsMicrophoneOn]  = useState(false);
+  const [isCameraOn,      setIsCameraOn]      = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [hasCopiedId, setHasCopiedId] = useState(false);
+  const [message,         setMessage]         = useState("");
+  const [hasCopiedId,     setHasCopiedId]     = useState(false);
+  const [isOwner,         setIsOwner]         = useState(false);
+  const [showLeaveModal,  setShowLeaveModal]  = useState(false);
+  const [isProcessing,    setIsProcessing]    = useState(false);
+
+  const localVideoRef  = useRef<HTMLVideoElement>(null);
+  const screenVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+
+  // ── Cargar perfil ─────────────────────────────────────────
+  useEffect(() => {
+    const loadUser = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      const data = await getUserProfile(currentUser.uid);
+      if (data) setProfile(data);
+    };
+    loadUser();
+  }, []);
+
+  const currentUser = useMemo(() => ({
+    uid:    profile?.uid    || "",
+    name:   profile?.name   || "Usuario",
+    avatar: profile?.avatar || null,
+  }), [profile]);
+
+  // ── Callback cuando el anfitrión cierra la sala ───────────
+  const handleRoomEnded = () => {
+    navigate("/dashboard");
+  };
+
+  const { remoteStreams, participants, socketRef, cleanup } = useWebRTC(
+    roomId!,
+    myStream,
+    screenStream,
+    currentUser,
+    handleRoomEnded, // ← invitado es redirigido automáticamente
+  );
+
+  // ── Verificar si es anfitrión ─────────────────────────────
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (!roomId || !auth.currentUser) return;
+      try {
+        const roomDoc = await getDoc(doc(db, "rooms", roomId));
+        if (roomDoc.exists() && roomDoc.data().ownerId === auth.currentUser.uid) {
+          setIsOwner(true);
+        }
+      } catch (err) {
+        console.error("Error verificando permisos de la sala:", err);
+      }
+    };
+    checkOwnership();
+  }, [roomId]);
+
+  // ── Acciones de salida ────────────────────────────────────
+  const stopAllStreams = () => {
+    myStream?.getTracks().forEach((t) => t.stop());
+    screenStream?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    setMyStream(null);
+    setScreenStream(null);
+  };
+
+  const handleLeaveOnly = () => {
+    stopAllStreams();
+    cleanup();
+    navigate("/dashboard");
+  };
+
+  const handleEndRoomForAll = async () => {
+    if (!roomId) return;
+    setIsProcessing(true);
+    try {
+      // Notificar al backend para que emita "room-ended" a todos
+      socketRef.current?.emit("end-room", { roomId });
+      await endStudyRoom(roomId);
+      stopAllStreams();
+      cleanup();
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("Error al finalizar la sala:", err);
+      setIsProcessing(false);
+    }
+  };
+
+  // ── Cámara ────────────────────────────────────────────────
+  const toggleCamera = async () => {
+    if (!isCameraOn) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: isMicrophoneOn,
+        });
+        localStreamRef.current = stream;
+        setMyStream(stream);
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        setIsCameraOn(true);
+      } catch (err) {
+        console.error("Error al acceder a la cámara:", err);
+      }
+    } else {
+      myStream?.getTracks().forEach((t) => t.stop());
+      setMyStream(null);
+      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      setIsCameraOn(false);
+    }
+  };
+
+  // ── Micrófono ─────────────────────────────────────────────
+  const toggleMicrophone = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((t) => {
+        t.enabled = !isMicrophoneOn;
+      });
+    }
+    setIsMicrophoneOn(!isMicrophoneOn);
+  };
+
+  // ── Pantalla compartida ───────────────────────────────────
+  const toggleScreenShare = async () => {
+    if (!isScreenSharing) {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        setIsScreenSharing(true);
+        setScreenStream(stream);
+        setTimeout(() => {
+          if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
+        }, 100);
+        stream.getVideoTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+          setScreenStream(null);
+          if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+        };
+      } catch (err) {
+        console.error("Error al compartir pantalla:", err);
+      }
+    } else {
+      screenStream?.getTracks().forEach((t) => t.stop());
+      setScreenStream(null);
+      if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+      setIsScreenSharing(false);
+    }
+  };
+
+  // Limpieza al desmontar
+  useEffect(() => {
+    return () => {
+      stopAllStreams();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const copyRoomId = () => {
     if (roomId) {
@@ -47,163 +233,36 @@ export default function Room() {
     }
   };
 
-  // 1. Referencias para inyectar el video en el HTML
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const screenVideoRef = useRef<HTMLVideoElement>(null);
+  // Total de personas en la sala: yo + participantes remotos
+  const totalParticipants = participants.length + 1;
 
-  // Referencias para guardar los "streams" y poder apagarlos después
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
-
-  const [isOwner, setIsOwner] = useState(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  // Verificar si el usuario es el anfitrión al entrar
-  useEffect(() => {
-    const checkOwnership = async () => {
-      if (!roomId || !auth.currentUser) return;
-
-      try {
-        const roomDoc = await getDoc(doc(db, "rooms", roomId));
-        if (
-          roomDoc.exists() &&
-          roomDoc.data().ownerId === auth.currentUser.uid
-        ) {
-          setIsOwner(true);
-        }
-      } catch (error) {
-        console.error("Error verificando permisos de la sala:", error);
-      }
-    };
-
-    checkOwnership();
-  }, [roomId]);
-
-  // Acciones de salida
-  const handleLeaveOnly = () => {
-    // Solo se va el usuario. (Aquí iría la lógica de desconectar su Socket)
-    navigate("/dashboard");
-  };
-
-  const handleEndRoomForAll = async () => {
-    if (!roomId) return;
-    setIsProcessing(true);
-    try {
-      await endStudyRoom(roomId); // Cambia isActive a false en Firestore
-      // El resto de usuarios deberían tener un onSnapshot que los expulse si isActive es false
-      navigate("/dashboard");
-    } catch (error) {
-      console.error("Error al finalizar la sala:", error);
-      setIsProcessing(false);
-    }
-  };
-
-  // 2. Función para encender/apagar Cámara y Micrófono
-  const toggleCamera = async () => {
-    if (!isCameraOn) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: isMicrophoneOn,
-        });
-
-        setMyStream(stream); // <--- Guardamos el stream en el estado
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-        setIsCameraOn(true);
-      } catch (error) {
-        console.error("Error al acceder a la cámara:", error);
-      }
-    } else {
-      myStream?.getTracks().forEach((track) => track.stop());
-      setMyStream(null);
-      if (localVideoRef.current) localVideoRef.current.srcObject = null;
-      setIsCameraOn(false);
-    }
-  };
-
-  const toggleMicrophone = () => {
-    if (localStreamRef.current) {
-      // Activar o desactivar las pistas de audio existentes
-      localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = !isMicrophoneOn;
-      });
-    }
-    setIsMicrophoneOn(!isMicrophoneOn);
-  };
-
-  // 3. Función para Compartir Pantalla
-  const toggleScreenShare = async () => {
-    if (!isScreenSharing) {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-        });
-
-        setIsScreenSharing(true);
-        setScreenStream(stream);
-
-        // Usamos un pequeño timeout o effect para asegurar que el ref ya exista
-        // cuando inyectamos el stream ya que usamos renderizado condicional con el video
-        setTimeout(() => {
-          if (screenVideoRef.current) {
-            screenVideoRef.current.srcObject = stream;
-          }
-        }, 100);
-
-        stream.getVideoTracks()[0].onended = () => {
-          setIsScreenSharing(false);
-          setScreenStream(null);
-          if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-        };
-      } catch (error) {
-        console.error("Error al compartir pantalla:", error);
-      }
-    } else {
-      screenStream?.getTracks().forEach((track) => track.stop());
-      setScreenStream(null);
-      if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-      setIsScreenSharing(false);
-    }
-  };
-
-  // Limpieza al desmontar el componente (salir de la sala)
-  useEffect(() => {
-    const localStream = localStreamRef.current;
-    const screenStream = screenStreamRef.current;
-
-    return () => {
-      localStream?.getTracks().forEach((track) => track.stop());
-      screenStream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
+  if (!profile) {
+    return (
+      <div className="h-screen flex items-center justify-center text-white bg-[#0F0F0F]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-zinc-400 text-sm">Cargando perfil...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-full bg-[#0F0F0F] flex flex-col font-sans text-gray-100 overflow-hidden relative">
-      {/* --- TOP BAR (ROOM ID) --- */}
+
+      {/* ── TOP BAR ── */}
       <div className="h-14 shrink-0 bg-[#121212] border-b border-gray-800 flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-sm font-medium">
-              ID de la Sala:
-            </span>
+            <span className="text-gray-400 text-sm font-medium">ID de la Sala:</span>
             <div className="flex items-center bg-[#1A1A1A] border border-gray-700 rounded-lg px-3 py-1.5 gap-3">
-              <span className="text-sky-300 font-mono text-sm tracking-wide">
-                {roomId}
-              </span>
-              <button
-                onClick={copyRoomId}
-                className="text-gray-400 hover:text-white transition-colors flex items-center justify-center"
-                title="Copiar ID"
-              >
-                {hasCopiedId ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
+              <span className="text-sky-300 font-mono text-sm tracking-wide">{roomId}</span>
+              <button onClick={copyRoomId}
+                className="text-gray-400 hover:text-white transition-colors"
+                title="Copiar ID">
+                {hasCopiedId
+                  ? <Check className="w-4 h-4 text-green-500" />
+                  : <Copy className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -215,25 +274,18 @@ export default function Room() {
         </div>
       </div>
 
-      {/* --- ÁREA PRINCIPAL --- */}
+      {/* ── ÁREA PRINCIPAL ── */}
       <div className="flex-1 flex overflow-hidden p-4 gap-4">
-        {/* Izquierda: Pantalla Compartida */}
+
+        {/* Pantalla compartida / área central */}
         <div className="flex-1 bg-[#1A1A1A] rounded-2xl overflow-hidden relative border border-gray-800 flex flex-col">
           {isScreenSharing ? (
-            // Si TÚ estás compartiendo pantalla, ves tu propia pantalla
-            <video
-              ref={screenVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-contain bg-black"
-            />
+            <video ref={screenVideoRef} autoPlay playsInline muted
+              className="w-full h-full object-contain bg-black" />
           ) : remoteStreams.length > 0 ? (
-            // Si el INVITADO está recibiendo video, lo mostramos en el centro como presentación
             <RemoteVideo
               stream={remoteStreams[remoteStreams.length - 1].stream}
-              className="w-full h-full object-contain bg-black"
-            />
+              className="w-full h-full object-contain bg-black" />
           ) : (
             // Pantalla en reposo
             <>
@@ -255,48 +307,94 @@ export default function Room() {
           </div>
         </div>
 
-        {/* Derecha: Barra Lateral */}
-        <div className="w-80 lg:w-95 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3 h-48 shrink-0 overflow-y-auto">
-            {/* 1. TU CÁMARA (Local) */}
-            <div className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 flex items-center justify-center h-20">
+        {/* Barra lateral derecha */}
+        <div className="w-80 lg:w-[380px] flex flex-col gap-4">
+
+          {/* Conteo de participantes */}
+          <div className="flex items-center justify-between px-3 text-xs text-gray-400">
+            <span>Participantes: {totalParticipants}</span>
+            <span>{participants.length} invitado{participants.length !== 1 ? "s" : ""}</span>
+          </div>
+
+          {/* Grid de cámaras */}
+          <div className="grid grid-cols-2 gap-3 shrink-0 overflow-y-auto max-h-52">
+
+            {/* ── TU PROPIA TARJETA (siempre visible) ── */}
+            <div className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 h-20">
+              {/* Video cuando cámara encendida */}
               <video
                 ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
+                autoPlay playsInline muted
                 className={`w-full h-full object-cover transform scale-x-[-1] ${!isCameraOn ? "hidden" : ""}`}
               />
+              {/* Avatar cuando cámara apagada */}
               {!isCameraOn && (
-                <div className="absolute top-2 right-2 text-red-500">
-                  <VideoOff className="w-4 h-4" />
+                <div className="w-full h-full flex items-center justify-between gap-2 p-2 bg-[#111827]">
+                  <div className="flex items-center gap-2">
+                    <ParticipantAvatar
+                      name={profile.name || "Tú"}
+                      avatar={profile.avatar}
+                      size={10}
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-white leading-tight truncate max-w-[70px]">
+                        {profile.name?.split(" ")[0] || "Tú"}
+                      </p>
+                      <p className="text-[10px] text-gray-400">Cámara apagada</p>
+                    </div>
+                  </div>
+                  <VideoOff className="w-4 h-4 text-gray-500 shrink-0" />
                 </div>
               )}
-              <div className="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-gray-200 z-10">
+              {/* Badge "Tú" siempre visible */}
+              <div className="absolute bottom-1 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 z-10">
                 Tú
               </div>
             </div>
 
-            {/* 2. CÁMARAS DE LOS DEMÁS (Renderizado Dinámico de WebRTC) */}
-            {remoteStreams.map((remoteNode) => (
-              <div
-                key={remoteNode.id}
-                className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 h-20"
-              >
-                <RemoteVideo stream={remoteNode.stream} />
-                <div className="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-gray-200 z-10">
-                  Participante
+            {/* ── TARJETAS DE PARTICIPANTES REMOTOS ── */}
+            {participants.map((participant) => {
+              const remoteVideo = remoteStreams.find((s) => s.id === participant.id);
+
+              return (
+                <div key={participant.id}
+                  className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 h-20">
+                  {remoteVideo ? (
+                    // Cámara encendida → mostrar video
+                    <>
+                      <RemoteVideo stream={remoteVideo.stream} />
+                      <div className="absolute bottom-1 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 z-10">
+                        {participant.name}
+                      </div>
+                    </>
+                  ) : (
+                    // Cámara apagada → mostrar avatar + nombre
+                    <div className="w-full h-full flex items-center justify-between gap-2 p-2 bg-[#111827]">
+                      <div className="flex items-center gap-2">
+                        <ParticipantAvatar
+                          name={participant.name}
+                          avatar={participant.avatar}
+                          size={10}
+                        />
+                        <div>
+                          <p className="text-xs font-semibold text-white leading-tight truncate max-w-[70px]">
+                            {participant.name.split(" ")[0]}
+                          </p>
+                          <p className="text-[10px] text-gray-400">Cámara apagada</p>
+                        </div>
+                      </div>
+                      <VideoOff className="w-4 h-4 text-gray-500 shrink-0" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Panel de Chat */}
           <div className="flex-1 bg-[#121212] rounded-2xl border border-gray-800 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
-              <h3 className="font-mono text-sm font-bold text-gray-300">
-                Chat de la Sala
-              </h3>
+              <h3 className="font-mono text-sm font-bold text-gray-300">Chat de la Sala</h3>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               <ChatHistory
@@ -322,36 +420,22 @@ export default function Room() {
         </div>
       </div>
 
-      {/* --- BARRA INFERIOR DE CONTROLES --- */}
+      {/* ── BARRA INFERIOR ── */}
       <div className="h-20 shrink-0 border-t border-gray-800 bg-[#121212] px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggleCamera} // <--- Llamada a la función
-            className={`p-4 rounded-2xl transition-all ${isCameraOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}
-          >
-            {isCameraOn ? (
-              <Video className="w-5 h-5" />
-            ) : (
-              <VideoOff className="w-5 h-5" />
-            )}
+          <button onClick={toggleCamera}
+            className={`p-4 rounded-2xl transition-all ${isCameraOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
+            {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
           </button>
-          <button
-            onClick={toggleMicrophone} // <--- Asume que creaste esta función análoga
-            className={`p-4 rounded-2xl transition-all ${isMicrophoneOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}
-          >
-            {isMicrophoneOn ? (
-              <Mic className="w-5 h-5" />
-            ) : (
-              <MicOff className="w-5 h-5" />
-            )}
+          <button onClick={toggleMicrophone}
+            className={`p-4 rounded-2xl transition-all ${isMicrophoneOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
+            {isMicrophoneOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
           </button>
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            onClick={toggleScreenShare} // <--- Llamada a la función
-            className={`flex flex-col items-center gap-1.5 p-2 w-20 transition-colors ${isScreenSharing ? "text-sky-400" : "text-gray-400 hover:text-white"}`}
-          >
+          <button onClick={toggleScreenShare}
+            className={`flex flex-col items-center gap-1.5 p-2 w-20 transition-colors ${isScreenSharing ? "text-sky-400" : "text-gray-400 hover:text-white"}`}>
             <MonitorUp className="w-5 h-5" />
             <span className="text-[10px] font-medium">
               {isScreenSharing ? "Dejar de presentar" : "Presentar"}
@@ -365,65 +449,54 @@ export default function Room() {
 
         <div className="flex items-center gap-3">
           <button className="p-4 rounded-2xl bg-[#2A2A2A] text-gray-300 hover:bg-gray-700 transition-colors">
-            <Users className="w-5 h-5" />
+            <div className="relative">
+              <Users className="w-5 h-5" />
+              <span className="absolute -top-2 -right-2 bg-sky-500 text-white text-[10px] px-1.5 rounded-full">
+                {totalParticipants}
+              </span>
+            </div>
           </button>
-          {/* BOTÓN DE SALIR */}
-          <button
-            onClick={() => setShowLeaveModal(true)}
-            className="p-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 transition-all"
-          >
+          <button onClick={() => setShowLeaveModal(true)}
+            className="p-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 transition-all">
             <PhoneOff className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* --- MODAL DE CONFIRMACIÓN DE SALIDA --- */}
+      {/* ── MODAL DE SALIDA ── */}
       {showLeaveModal && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-          <div className="bg-[#1C1C1C] border border-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1C1C1C] border border-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-3 bg-red-500/10 text-red-500 rounded-xl">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-white">
-                ¿Salir de la sala?
-              </h3>
+              <h3 className="text-lg font-bold text-white">¿Salir de la sala?</h3>
             </div>
 
             <p className="text-sm text-gray-400 mb-6">
               {isOwner
-                ? "Como anfitrión, puedes salir dejando la sala abierta para los demás, o finalizarla por completo."
+                ? "Como anfitrión, puedes salir dejando la sala abierta, o finalizarla para todos."
                 : "Estás a punto de abandonar esta sesión de estudio."}
             </p>
 
             <div className="flex flex-col gap-3">
               {isOwner && (
-                <button
-                  onClick={handleEndRoomForAll}
-                  disabled={isProcessing}
-                  className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
-                >
+                <button onClick={handleEndRoomForAll} disabled={isProcessing}
+                  className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50">
                   {isProcessing ? "Finalizando..." : "Finalizar para todos"}
                 </button>
               )}
-
-              <button
-                onClick={handleLeaveOnly}
-                disabled={isProcessing}
+              <button onClick={handleLeaveOnly} disabled={isProcessing}
                 className={`w-full py-3 px-4 font-bold rounded-xl transition-colors ${
                   isOwner
                     ? "bg-[#2A2A2A] text-white hover:bg-gray-700"
                     : "bg-red-600 hover:bg-red-700 text-white"
-                }`}
-              >
+                }`}>
                 Solo salir de la sala
               </button>
-
-              <button
-                onClick={() => setShowLeaveModal(false)}
-                disabled={isProcessing}
-                className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2"
-              >
+              <button onClick={() => setShowLeaveModal(false)} disabled={isProcessing}
+                className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2">
                 Cancelar
               </button>
             </div>
@@ -434,7 +507,7 @@ export default function Room() {
   );
 }
 
-// Mini-componente auxiliar al final de Room.tsx
+// ── Componente auxiliar RemoteVideo ───────────────────────────
 const RemoteVideo = ({
   stream,
   className = "w-full h-full object-cover",
@@ -445,9 +518,7 @@ const RemoteVideo = ({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-    }
+    if (videoRef.current) videoRef.current.srcObject = stream;
   }, [stream]);
 
   return (
