@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { endStudyRoom } from "../config/rooms";
+import ChatHistory from "../components/rooms/ChatHistory";
 import {
   Mic,
   MicOff,
@@ -171,9 +172,12 @@ export default function Room() {
 
   // Limpieza al desmontar el componente (salir de la sala)
   useEffect(() => {
+    const localStream = localStreamRef.current;
+    const screenStream = screenStreamRef.current;
+
     return () => {
-      localStreamRef.current?.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStream?.getTracks().forEach((track) => track.stop());
+      screenStream?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -233,7 +237,7 @@ export default function Room() {
           ) : (
             // Pantalla en reposo
             <>
-              <div className="absolute inset-0 bg-gradient-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
+              <div className="absolute inset-0 bg-linear-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
                 <pre className="text-sky-500/30 font-mono text-sm sm:text-lg md:text-2xl p-8 opacity-50 select-none">
                   {`// Esperando transmisión...`}
                 </pre>
@@ -252,7 +256,7 @@ export default function Room() {
         </div>
 
         {/* Derecha: Barra Lateral */}
-        <div className="w-80 lg:w-[380px] flex flex-col gap-4">
+        <div className="w-80 lg:w-95 flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 h-48 shrink-0 overflow-y-auto">
             {/* 1. TU CÁMARA (Local) */}
             <div className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 flex items-center justify-center h-20">
@@ -294,10 +298,11 @@ export default function Room() {
                 Chat de la Sala
               </h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              <p className="text-xs text-center text-gray-500 mt-10">
-                Inicio del historial de chat...
-              </p>
+            <div className="flex-1 overflow-y-auto p-4">
+              <ChatHistory
+                roomId={roomId ?? ""}
+                currentUserId={auth.currentUser?.uid ?? ""}
+              />
             </div>
             <div className="p-3 shrink-0">
               <div className="bg-[#1E1E1E] border border-gray-700 rounded-xl flex items-center pr-2">
@@ -445,5 +450,9 @@ const RemoteVideo = ({
     }
   }, [stream]);
 
-  return <video ref={videoRef} autoPlay playsInline className={className} />;
+  return (
+    <video ref={videoRef} autoPlay playsInline className={className}>
+      <track kind="captions" label="Captions" />
+    </video>
+  );
 };
