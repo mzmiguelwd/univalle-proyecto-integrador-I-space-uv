@@ -36,6 +36,15 @@ const io = new Server(server, {
   cors: corsOptions,
 });
 
+const connectedUsers = new Map<
+  string,
+  {
+    uid: string;
+    name: string;
+    avatar?: string | null;
+  }
+>();
+
 // Listen for WebSocket connections
 io.on("connection", (socket: Socket) => {
   console.log(`User connected: ${socket.id}`);
@@ -50,14 +59,57 @@ io.on("connection", (socket: Socket) => {
   // --- ROOMS & WEBRTC LOGIC ---
 
   // 1. User joins a specific room
-  socket.on("join-room", (roomId: string) => {
-    socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
+  socket.on("join-room", async ({ roomId, user,}: {
+      roomId: string;
+      user: {
+        uid: string;
+        name: string;
+        avatar?: string | null;
+      };
+    }) => {
+      console.log("JOIN ROOM:", roomId, user.name);
+      connectedUsers.set(socket.id, user);
+      await socket.join(roomId);
 
-    // Notify others in the room that a new user has joined
-    socket.to(roomId).emit("user-connected", socket.id);
-  });
+      const roomSockets = await io.in(roomId).allSockets();
 
+      const users = Array.from(roomSockets)
+        .filter((socketId) => socketId !== socket.id)
+        .map((socketId) => ({
+          socketId,
+          ...connectedUsers.get(socketId),
+        }))
+        .filter((user) => user.uid !== undefined);
+
+      const roomDebug = {
+        roomId,
+        socketId: socket.id,
+        socketRooms: Array.from(socket.rooms),
+        roomSockets: Array.from(roomSockets),
+        memberCount: roomSockets.size,
+        users,
+      };
+
+      console.log("ROOM DEBUG:", roomDebug);
+      socket.emit("room-users", users);
+      socket.emit("room-debug", roomDebug);
+
+      socket.to(roomId).emit("user-connected", {
+        socketId: socket.id,
+        ...user,
+      });
+
+      socket.to(roomId).emit("room-debug", {
+        joinedBy: socket.id,
+        roomId,
+        memberCount: roomSockets.size,
+        users,
+      });
+
+      console.log(`${user.name} joined room ${roomId}`);
+    },
+  );
+  
   // 2. Offer exchange (Call initiator)
   socket.on("webrtc-offer", ({ offer, to }: { offer: any; to: string }) => {
     // Relay the offer to the specific recipient
@@ -94,7 +146,13 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
+    connectedUsers.delete(socket.id);
   });
+
+  socket.on("end-room", ({ roomId }) => {
+  socket.to(roomId).emit("room-ended");
+  });
+
 });
 
 // Start the server
