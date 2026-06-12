@@ -16,5 +16,5 @@ export default function ProtectedRoute({
     return <Navigate to={redirectTo} replace />;
   }
 
-  return children;
+  return <>{children}</>;
 }
