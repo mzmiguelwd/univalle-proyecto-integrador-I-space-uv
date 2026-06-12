@@ -4,10 +4,20 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { endStudyRoom } from "../config/rooms";
 import { getUserProfile, type UserProfile } from "../config/auth";
+import ChatHistory from "../components/rooms/ChatHistory";
 import {
-  Mic, MicOff, Video, VideoOff, MonitorUp,
-  MessageSquare, Send, Users, PhoneOff,
-  AlertTriangle, Copy, Check,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  MonitorUp,
+  MessageSquare,
+  Send,
+  Users,
+  PhoneOff,
+  AlertTriangle,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useWebRTC } from "../hooks/useWebRTC";
 
@@ -277,11 +287,14 @@ export default function Room() {
               stream={remoteStreams[remoteStreams.length - 1].stream}
               className="w-full h-full object-contain bg-black" />
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
-              <pre className="text-sky-500/30 font-mono text-sm sm:text-lg md:text-2xl p-8 opacity-50 select-none">
-                {`// Esperando transmisión...`}
-              </pre>
-            </div>
+            // Pantalla en reposo
+            <>
+              <div className="absolute inset-0 bg-linear-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
+                <pre className="text-sky-500/30 font-mono text-sm sm:text-lg md:text-2xl p-8 opacity-50 select-none">
+                  {`// Esperando transmisión...`}
+                </pre>
+              </div>
+            </>
           )}
 
           <div className="absolute bottom-4 left-4 bg-[#0A304E] text-sky-200 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 z-10">
@@ -383,10 +396,11 @@ export default function Room() {
             <div className="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
               <h3 className="font-mono text-sm font-bold text-gray-300">Chat de la Sala</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              <p className="text-xs text-center text-gray-500 mt-10">
-                Inicio del historial de chat...
-              </p>
+            <div className="flex-1 overflow-y-auto p-4">
+              <ChatHistory
+                roomId={roomId ?? ""}
+                currentUserId={auth.currentUser?.uid ?? ""}
+              />
             </div>
             <div className="p-3 shrink-0">
               <div className="bg-[#1E1E1E] border border-gray-700 rounded-xl flex items-center pr-2">
@@ -507,5 +521,9 @@ const RemoteVideo = ({
     if (videoRef.current) videoRef.current.srcObject = stream;
   }, [stream]);
 
-  return <video ref={videoRef} autoPlay playsInline className={className} />;
+  return (
+    <video ref={videoRef} autoPlay playsInline className={className}>
+      <track kind="captions" label="Captions" />
+    </video>
+  );
 };
