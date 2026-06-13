@@ -1,26 +1,39 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import Peer, { type MediaConnection } from "peerjs";
 
 const SOCKET_SERVER_URL =
   import.meta.env.VITE_SOCKET_SERVER_URL || "http://localhost:3000";
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
-};
+const url = new URL(SOCKET_SERVER_URL);
+const peerHost = url.hostname;
+let peerPort;
+if (url.port) {
+  peerPort = Number.parseInt(url.port);
+} else if (url.protocol === "https:") {
+  peerPort = 443;
+} else {
+  peerPort = 80;
+}
 
+const PEERJS_CONFIG = {
+  host: peerHost,
+  port: peerPort,
+  path: "/peerjs",
+  secure: url.protocol === "https:",
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ],
+  },
+};
 
 export type Participant = {
   id: string;
   name: string;
   avatar?: string | null;
+  peerId?: string;
 };
 
 export const useWebRTC = (
@@ -28,211 +41,180 @@ export const useWebRTC = (
   localStream: MediaStream | null,
   screenStream: MediaStream | null,
   currentUser: { uid: string; name: string; avatar?: string | null },
-  onRoomEnded?: () => void, // ← callback para cuando el anfitrión cierra la sala
+  onRoomEnded?: () => void,
 ) => {
   const [remoteStreams, setRemoteStreams] = useState<
     { id: string; stream: MediaStream }[]
   >([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
 
-  const socketRef    = useRef<Socket | null>(null);
-  const peersRef     = useRef<{ [socketId: string]: RTCPeerConnection }>({});
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const peerRef = useRef<Peer | null>(null);
+  const callsRef = useRef<{ [peerId: string]: MediaConnection }>({});
 
+  const currentLocalStreamRef = useRef(localStream);
+  const currentScreenStreamRef = useRef(screenStream);
 
-  // ── Crear conexión WebRTC con un peer ─────────────────────
-  const createPeerConnection = useCallback(
-    (userId: string, socket: Socket) => {
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+  useEffect(() => {
+    currentLocalStreamRef.current = localStream;
+    currentScreenStreamRef.current = screenStream;
+  }, [localStream, screenStream]);
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("webrtc-ice-candidate", {
-            candidate: event.candidate,
-            to: userId,
-          });
-        }
-      };
+  const getCombinedStream = useCallback(() => {
+    const combined = new MediaStream();
+    if (currentLocalStreamRef.current) {
+      currentLocalStreamRef.current
+        .getTracks()
+        .forEach((t) => combined.addTrack(t));
+    }
+    if (currentScreenStreamRef.current) {
+      currentScreenStreamRef.current
+        .getTracks()
+        .forEach((t) => combined.addTrack(t));
+    }
+    return combined;
+  }, []);
 
-      pc.ontrack = (event) => {
-        const stream = event.streams[0];
-        setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === userId)) return prev;
-          return [...prev, { id: userId, stream }];
-        });
-      };
-
-      pc.onnegotiationneeded = async () => {
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit("webrtc-offer", { offer, to: userId });
-        } catch (err) {
-          console.error("Error durante negociación:", err);
-        }
-      };
-
-      return pc;
-    },
-    [],
-  );
-
-  // ── Limpiar todo al salir ──────────────────────────────────
-  const cleanup = useCallback(() => {
+  const cleanupPeerConnections = useCallback(() => {
     socketRef.current?.disconnect();
-    Object.values(peersRef.current).forEach((pc) => pc.close());
-    peersRef.current = {};
+    peerRef.current?.destroy();
+    Object.values(callsRef.current).forEach((call) => call.close());
+    callsRef.current = {};
     setRemoteStreams([]);
     setParticipants([]);
   }, []);
 
-  // ── Efecto principal: Socket.IO + señalización ─────────────
   useEffect(() => {
-    if (!roomId || !currentUser.uid) {
-      console.warn("useWebRTC skipping effect because missing roomId or uid", {
+    if (!roomId || !currentUser.uid) return;
+
+    const socket = io(SOCKET_SERVER_URL);
+    socketRef.current = socket;
+
+    const peer = new Peer(PEERJS_CONFIG);
+    peerRef.current = peer;
+
+    peer.on("open", (myPeerId) => {
+      console.info("PeerJS connected with ID:", myPeerId);
+
+      socket.emit("join-room", {
         roomId,
-        uid: currentUser.uid,
+        user: {
+          uid: currentUser.uid,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          peerId: myPeerId,
+        },
       });
-      return;
-    }
-
-    const socketInstance = io(SOCKET_SERVER_URL);
-
-    socketRef.current = socketInstance;
-    setSocket(socketInstance);
-
-    const socket = socketInstance;
-
-    socket.on("connect", () => {
-      console.info("Socket connected", { socketId: socket.id, roomId, url: SOCKET_SERVER_URL });
     });
 
-    socket.on("connect_error", (err) => {
-      console.error("Socket connect error:", err);
+    peer.on("call", (call) => {
+      call.answer(getCombinedStream());
+
+      call.on("stream", (userVideoStream) => {
+        setRemoteStreams((prev) => {
+          if (prev.some((s) => s.id === call.peer)) return prev;
+          return [...prev, { id: call.peer, stream: userVideoStream }];
+        });
+      });
+
+      callsRef.current[call.peer] = call;
     });
 
-    socket.on("disconnect", (reason) => {
-      console.info("Socket disconnected", { reason, roomId, url: SOCKET_SERVER_URL });
-    });
-
-    // Lista de usuarios YA en la sala al entrar
     socket.on("room-users", (users: any[]) => {
       const participantsList = users.map((u) => ({
-        id:     u.socketId,
-        name:   u.name   || u.user?.name   || "Usuario",
+        id: u.socketId,
+        name: u.name || u.user?.name || "Usuario",
         avatar: u.avatar ?? u.user?.avatar ?? null,
+        peerId: u.peerId,
       }));
-
-      console.info("Room users received", { roomId, count: participantsList.length });
       setParticipants(participantsList);
     });
 
-    // Nuevo usuario entra
-    socket.on("user-connected", async ({ socketId, name, avatar }) => {
-      console.info("User connected", { socketId, name });
+    socket.on("user-connected", ({ socketId, name, avatar, peerId }) => {
+      setParticipants((prev) => [
+        ...prev,
+        { id: socketId, name: name || "Usuario", avatar, peerId },
+      ]);
 
-      setParticipants((prev) => {
-        if (prev.some((p) => p.id === socketId)) return prev;
-        return [...prev, { id: socketId, name: name || "Usuario", avatar: avatar ?? null }];
-      });
+      if (peerId) {
+        const call = peer.call(peerId, getCombinedStream());
 
-      const pc = createPeerConnection(socketId, socket);
-      peersRef.current[socketId] = pc;
+        call.on("stream", (userVideoStream) => {
+          setRemoteStreams((prev) => {
+            if (prev.some((s) => s.id === peerId)) return prev;
+            return [...prev, { id: peerId, stream: userVideoStream }];
+          });
+        });
 
-      if (localStream) {
-        localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+        callsRef.current[peerId] = call;
       }
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("webrtc-offer", { offer, to: socketId });
     });
 
-    socket.emit("join-room", {
-      roomId,
-      user: {
-        uid:    currentUser.uid,
-        name:   currentUser.name,
-        avatar: currentUser.avatar,
+    socket.on(
+      "user-disconnected",
+      (userId: string, disconnectedPeerId: string) => {
+        setParticipants((prev) => prev.filter((p) => p.id !== userId));
+
+        if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
+          callsRef.current[disconnectedPeerId].close();
+          delete callsRef.current[disconnectedPeerId];
+          setRemoteStreams((prev) =>
+            prev.filter((s) => s.id !== disconnectedPeerId),
+          );
+        }
       },
-    });
+    );
 
-    // Recibe oferta
-    socket.on("webrtc-offer", async ({ offer, from }) => {
-      let pc = peersRef.current[from];
-      if (!pc) {
-        pc = createPeerConnection(from, socket);
-        peersRef.current[from] = pc;
-      }
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("webrtc-answer", { answer, to: from });
-    });
-
-    // Recibe respuesta
-    socket.on("webrtc-answer", async ({ answer, from }) => {
-      const pc = peersRef.current[from];
-      if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      }
-    });
-
-    // Recibe ICE candidates
-    socket.on("webrtc-ice-candidate", async ({ candidate, from }) => {
-      const pc = peersRef.current[from];
-      if (pc) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      }
-    });
-
-    // Usuario se desconecta
-    socket.on("user-disconnected", (userId: string) => {
-      setParticipants((prev) => prev.filter((p) => p.id !== userId));
-      peersRef.current[userId]?.close();
-      delete peersRef.current[userId];
-      setRemoteStreams((prev) => prev.filter((s) => s.id !== userId));
-    });
-
-    // ── Anfitrión finalizó la sala para todos ─────────────────
-    // El backend debe emitir "room-ended" a todos los participantes
-    // cuando recibe el evento de finalizar sala
     socket.on("room-ended", () => {
-      console.log("La sala fue cerrada por el anfitrión.");
-      cleanup();
+      cleanupPeerConnections();
       onRoomEnded?.();
     });
 
     return () => {
-      cleanup();
+      cleanupPeerConnections();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, currentUser.uid]);
 
-  // ── Efecto sincronizador de streams ───────────────────────
   useEffect(() => {
-    const allStreams = [localStream, screenStream].filter(Boolean) as MediaStream[];
-    const currentTrackIds = new Set<string>();
+    if (!peerRef.current || participants.length === 0) return;
 
-    allStreams.forEach((stream) => {
-      stream.getTracks().forEach((track) => {
-        currentTrackIds.add(track.id);
-        Object.values(peersRef.current).forEach((pc) => {
-          const alreadySending = pc.getSenders().some((s) => s.track?.id === track.id);
-          if (!alreadySending) pc.addTrack(track, stream);
-        });
+    const currentLocalStream = localStream || new MediaStream();
+
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => {
+        currentLocalStream.addTrack(track);
       });
-    });
+    }
 
-    Object.values(peersRef.current).forEach((pc) => {
-      pc.getSenders().forEach((sender) => {
-        if (sender.track && !currentTrackIds.has(sender.track.id)) {
-          pc.removeTrack(sender);
+    participants.forEach((participant) => {
+      if (participant.peerId) {
+        if (callsRef.current[participant.peerId]) {
+          callsRef.current[participant.peerId].close();
         }
-      });
+
+        const newCall = peerRef.current!.call(
+          participant.peerId,
+          currentLocalStream,
+        );
+
+        newCall.on("stream", (userVideoStream) => {
+          setRemoteStreams((prev) => {
+            const filtered = prev.filter((s) => s.id !== participant.peerId);
+            return [
+              ...filtered,
+              { id: participant.peerId, stream: userVideoStream },
+            ];
+          });
+        });
+
+        // Guardamos la nueva referencia
+        callsRef.current[participant.peerId] = newCall;
+      }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStream, screenStream]);
 
-  return { remoteStreams, participants, socketRef, socket, cleanup };
+  return { remoteStreams, participants, socketRef, cleanupPeerConnections };
 };

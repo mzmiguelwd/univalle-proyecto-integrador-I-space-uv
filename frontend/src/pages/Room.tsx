@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, collection, addDoc,  serverTimestamp,getDocs, query, orderBy, limit, } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+} from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { endStudyRoom } from "../config/rooms";
 import { getUserProfile, type UserProfile } from "../config/auth";
@@ -27,11 +38,22 @@ import {
 } from "lucide-react";
 import { useWebRTC } from "../hooks/useWebRTC";
 
+import ChatHistory from "../components/rooms/ChatHistory";
+
 // ── Avatares emoji (igual que en RegisterPage) ────────────────
 const AVATARS: Record<string, string> = {
-  owl: "🦉", rocket: "🚀", brain: "🧠", star: "⭐",
-  fire: "🔥", diamond: "💎", plant: "🌱", bolt: "⚡",
-  moon: "🌙", book: "📚", atom: "⚛️", compass: "🧭",
+  owl: "🦉",
+  rocket: "🚀",
+  brain: "🧠",
+  star: "⭐",
+  fire: "🔥",
+  diamond: "💎",
+  plant: "🌱",
+  bolt: "⚡",
+  moon: "🌙",
+  book: "📚",
+  atom: "⚛️",
+  compass: "🧭",
 };
 
 // ── Helper: renderiza avatar de un participante ───────────────
@@ -53,14 +75,18 @@ function ParticipantAvatar({
   // ID de emoji
   if (avatar && AVATARS[avatar]) {
     return (
-      <div className={`h-${size} w-${size} rounded-full bg-slate-700 flex items-center justify-center text-2xl`}>
+      <div
+        className={`h-${size} w-${size} rounded-full bg-slate-700 flex items-center justify-center text-2xl`}
+      >
         {AVATARS[avatar]}
       </div>
     );
   }
   // Fallback: inicial
   return (
-    <div className={`h-${size} w-${size} rounded-full bg-sky-700 flex items-center justify-center font-bold text-white text-lg`}>
+    <div
+      className={`h-${size} w-${size} rounded-full bg-sky-700 flex items-center justify-center font-bold text-white text-lg`}
+    >
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -68,22 +94,22 @@ function ParticipantAvatar({
 
 export default function Room() {
   const { roomId } = useParams();
-  const navigate   = useNavigate();
+  const navigate = useNavigate();
 
-  const [myStream,     setMyStream]     = useState<MediaStream | null>(null);
+  const [myStream, setMyStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [profile,      setProfile]      = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  const [isMicrophoneOn,  setIsMicrophoneOn]  = useState(false);
-  const [isCameraOn,      setIsCameraOn]      = useState(false);
+  const [isMicrophoneOn, setIsMicrophoneOn] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [message,         setMessage]         = useState("");
-  const [hasCopiedId,     setHasCopiedId]     = useState(false);
-  const [isOwner,         setIsOwner]         = useState(false);
-  const [showLeaveModal,  setShowLeaveModal]  = useState(false);
-  const [isProcessing,    setIsProcessing]    = useState(false);
+  const [message, setMessage] = useState("");
+  const [hasCopiedId, setHasCopiedId] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const localVideoRef  = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
@@ -104,11 +130,14 @@ export default function Room() {
     loadUser();
   }, []);
 
-  const currentUser = useMemo(() => ({
-    uid:    profile?.uid    || "",
-    name:   profile?.name   || "Usuario",
-    avatar: profile?.avatar || null,
-  }), [profile]);
+  const currentUser = useMemo(
+    () => ({
+      uid: profile?.uid || "",
+      name: profile?.name || "Usuario",
+      avatar: profile?.avatar || null,
+    }),
+    [profile],
+  );
 
   //Scroll automatico al recibir un nuevo mensaje
   useEffect(() => {
@@ -117,94 +146,65 @@ export default function Room() {
     });
   }, [messages]);
 
-  
-
   // ── Función para chat
   const handleSendMessage = async () => {
     const cleanText = message.trim().replace(/[<>]/g, "");
-
-    console.log("SEND DEBUG", {
-      roomId,
-      cleanText,
-      authUser: auth.currentUser?.uid,
-      socketConnected: socketRef.current?.connected,
-    });
-
     if (!roomId || !cleanText || !auth.currentUser) return;
 
-    
-
-    const newMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      text: cleanText,
-      senderId: auth.currentUser.uid,
-      senderName: profile?.name || profile?.username || "Usuario",
-      timestamp: new Date().toISOString(),
-    };
-
-    socketRef.current?.emit("chat:send-message", {
-      roomId,
-      message: newMessage,
-    });
-
-    setMessages((prev) => [...prev, newMessage]);
-
-    await addDoc(collection(db, "rooms", roomId, "messages"), {
-      text: newMessage.text,
-      senderId: newMessage.senderId,
-      senderName: newMessage.senderName,
-      timestamp: serverTimestamp(),
-    });
-
     setMessage("");
-  };
-
-  //--─ Cargar historial de chat al entrar ───────────────────────
-  const handleRetryLoadMessages = () => {
-    loadMessagesHistory();
-  };
-
-  // ── Función para cargar el historial de mensajes (US11) ─────────
-  const loadMessagesHistory = async () => {
-    if (!roomId) return;
 
     try {
-      setIsLoadingMessages(true);
-      setMessagesError(null);
-
-      const messagesRef = collection(db, "rooms", roomId, "messages");
-
-      const messagesQuery = query(
-        messagesRef,
-        orderBy("timestamp", "asc"),
-        limit(50),
-      );
-
-      const snapshot = await getDocs(messagesQuery);
-
-      const loadedMessages: ChatMessage[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-
-        return {
-          id: doc.id,
-          text: data.text || "",
-          senderId: data.senderId || "",
-          senderName: data.senderName || "Usuario",
-          timestamp: data.timestamp?.toDate?.()?.toISOString?.() || "",
-        };
+      await addDoc(collection(db, "rooms", roomId, "messages"), {
+        text: cleanText,
+        senderId: auth.currentUser.uid,
+        senderName: profile?.name || profile?.username || "Usuario",
+        timestamp: serverTimestamp(),
       });
-
-      setMessages(loadedMessages);
     } catch (error) {
-      console.error("Error cargando historial:", error);
-      setMessagesError("No se pudo cargar el historial del chat.");
-    } finally {
-      setIsLoadingMessages(false);
+      console.error("Error enviando mensaje:", error);
     }
   };
 
+  // ── Función para cargar el historial de mensajes (US11) ─────────
   useEffect(() => {
-    loadMessagesHistory();
+    if (!roomId) return;
+
+    setIsLoadingMessages(true);
+    setMessagesError(null);
+
+    const messagesRef = collection(db, "rooms", roomId, "messages");
+    const messagesQuery = query(
+      messagesRef,
+      orderBy("timestamp", "asc"),
+      limit(100),
+    );
+
+    const unsubscribe = onSnapshot(
+      messagesQuery,
+      (snapshot) => {
+        const loadedMessages: ChatMessage[] = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            text: data.text || "",
+            senderId: data.senderId || "",
+            senderName: data.senderName || "Usuario",
+            timestamp: data.timestamp?.toDate?.()?.toISOString?.() || "",
+          };
+        });
+        setMessages(loadedMessages);
+        setIsLoadingMessages(false);
+      },
+      (error) => {
+        console.error("Error escuchando historial en vivo:", error);
+        setMessagesError("No se pudo conectar al chat.");
+        setIsLoadingMessages(false);
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, [roomId]);
 
   // ── Callback cuando el anfitrión cierra la sala ───────────
@@ -212,13 +212,14 @@ export default function Room() {
     navigate("/dashboard");
   };
 
-  const { remoteStreams, participants, socketRef, cleanup } = useWebRTC(
-    roomId!,
-    myStream,
-    screenStream,
-    currentUser,
-    handleRoomEnded, // ← invitado es redirigido automáticamente
-  );
+  const { remoteStreams, participants, socketRef, cleanupPeerConnections } =
+    useWebRTC(
+      roomId!,
+      myStream,
+      screenStream,
+      currentUser,
+      handleRoomEnded, // ← invitado es redirigido automáticamente
+    );
 
   const [socketReady, setSocketReady] = useState(false);
 
@@ -254,7 +255,10 @@ export default function Room() {
       if (!roomId || !auth.currentUser) return;
       try {
         const roomDoc = await getDoc(doc(db, "rooms", roomId));
-        if (roomDoc.exists() && roomDoc.data().ownerId === auth.currentUser.uid) {
+        if (
+          roomDoc.exists() &&
+          roomDoc.data().ownerId === auth.currentUser.uid
+        ) {
           setIsOwner(true);
         }
       } catch (err) {
@@ -275,7 +279,7 @@ export default function Room() {
 
   const handleLeaveOnly = () => {
     stopAllStreams();
-    cleanup();
+    cleanupPeerConnections();
     navigate("/dashboard");
   };
 
@@ -287,7 +291,7 @@ export default function Room() {
       socketRef.current?.emit("end-room", { roomId });
       await endStudyRoom(roomId);
       stopAllStreams();
-      cleanup();
+      cleanupPeerConnections();
       navigate("/dashboard");
     } catch (err) {
       console.error("Error al finalizar la sala:", err);
@@ -332,7 +336,9 @@ export default function Room() {
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+        });
         setIsScreenSharing(true);
         setScreenStream(stream);
         setTimeout(() => {
@@ -359,7 +365,7 @@ export default function Room() {
     return () => {
       stopAllStreams();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const copyRoomId = () => {
@@ -386,20 +392,27 @@ export default function Room() {
 
   return (
     <div className="h-screen w-full bg-[#0F0F0F] flex flex-col font-sans text-gray-100 overflow-hidden relative">
-
       {/* ── TOP BAR ── */}
       <div className="h-14 shrink-0 bg-[#121212] border-b border-gray-800 flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-sm font-medium">ID de la Sala:</span>
+            <span className="text-gray-400 text-sm font-medium">
+              ID de la Sala:
+            </span>
             <div className="flex items-center bg-[#1A1A1A] border border-gray-700 rounded-lg px-3 py-1.5 gap-3">
-              <span className="text-sky-300 font-mono text-sm tracking-wide">{roomId}</span>
-              <button onClick={copyRoomId}
+              <span className="text-sky-300 font-mono text-sm tracking-wide">
+                {roomId}
+              </span>
+              <button
+                onClick={copyRoomId}
                 className="text-gray-400 hover:text-white transition-colors"
-                title="Copiar ID">
-                {hasCopiedId
-                  ? <Check className="w-4 h-4 text-green-500" />
-                  : <Copy className="w-4 h-4" />}
+                title="Copiar ID"
+              >
+                {hasCopiedId ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -413,16 +426,21 @@ export default function Room() {
 
       {/* ── ÁREA PRINCIPAL ── */}
       <div className="flex-1 flex overflow-hidden p-4 gap-4">
-
         {/* Pantalla compartida / área central */}
         <div className="flex-1 bg-[#1A1A1A] rounded-2xl overflow-hidden relative border border-gray-800 flex flex-col">
           {isScreenSharing ? (
-            <video ref={screenVideoRef} autoPlay playsInline muted
-              className="w-full h-full object-contain bg-black" />
+            <video
+              ref={screenVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-contain bg-black"
+            />
           ) : remoteStreams.length > 0 ? (
             <RemoteVideo
               stream={remoteStreams[remoteStreams.length - 1].stream}
-              className="w-full h-full object-contain bg-black" />
+              className="w-full h-full object-contain bg-black"
+            />
           ) : (
             // Pantalla en reposo
             <>
@@ -446,22 +464,25 @@ export default function Room() {
 
         {/* Barra lateral derecha */}
         <div className="w-80 lg:w-[380px] flex flex-col gap-4">
-
           {/* Conteo de participantes */}
           <div className="flex items-center justify-between px-3 text-xs text-gray-400">
             <span>Participantes: {totalParticipants}</span>
-            <span>{participants.length} invitado{participants.length !== 1 ? "s" : ""}</span>
+            <span>
+              {participants.length} invitado
+              {participants.length !== 1 ? "s" : ""}
+            </span>
           </div>
 
           {/* Grid de cámaras */}
           <div className="grid grid-cols-2 gap-3 shrink-0 overflow-y-auto max-h-52">
-
             {/* ── TU PROPIA TARJETA (siempre visible) ── */}
             <div className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 h-20">
               {/* Video cuando cámara encendida */}
               <video
                 ref={localVideoRef}
-                autoPlay playsInline muted
+                autoPlay
+                playsInline
+                muted
                 className={`w-full h-full object-cover transform scale-x-[-1] ${!isCameraOn ? "hidden" : ""}`}
               />
               {/* Avatar cuando cámara apagada */}
@@ -477,7 +498,9 @@ export default function Room() {
                       <p className="text-xs font-semibold text-white leading-tight truncate max-w-[70px]">
                         {profile.name?.split(" ")[0] || "Tú"}
                       </p>
-                      <p className="text-[10px] text-gray-400">Cámara apagada</p>
+                      <p className="text-[10px] text-gray-400">
+                        Cámara apagada
+                      </p>
                     </div>
                   </div>
                   <VideoOff className="w-4 h-4 text-gray-500 shrink-0" />
@@ -491,11 +514,15 @@ export default function Room() {
 
             {/* ── TARJETAS DE PARTICIPANTES REMOTOS ── */}
             {participants.map((participant) => {
-              const remoteVideo = remoteStreams.find((s) => s.id === participant.id);
+              const remoteVideo = remoteStreams.find(
+                (s) => s.id === participant.id,
+              );
 
               return (
-                <div key={participant.id}
-                  className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 h-20">
+                <div
+                  key={participant.id}
+                  className="bg-[#1E1E1E] rounded-xl overflow-hidden relative border border-gray-800 h-20"
+                >
                   {remoteVideo ? (
                     // Cámara encendida → mostrar video
                     <>
@@ -517,7 +544,9 @@ export default function Room() {
                           <p className="text-xs font-semibold text-white leading-tight truncate max-w-[70px]">
                             {participant.name.split(" ")[0]}
                           </p>
-                          <p className="text-[10px] text-gray-400">Cámara apagada</p>
+                          <p className="text-[10px] text-gray-400">
+                            Cámara apagada
+                          </p>
                         </div>
                       </div>
                       <VideoOff className="w-4 h-4 text-gray-500 shrink-0" />
@@ -531,55 +560,20 @@ export default function Room() {
           {/* Panel de Chat */}
           <div className="flex-1 bg-[#121212] rounded-2xl border border-gray-800 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
-              <h3 className="font-mono text-sm font-bold text-gray-300">Chat de la Sala</h3>
+              <h3 className="font-mono text-sm font-bold text-gray-300">
+                Chat de la Sala
+              </h3>
             </div>
-            
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2">
-              {isLoadingMessages && (
-                <div className="space-y-3">
-                  <div className="h-8 w-2/3 rounded-lg bg-slate-800 animate-pulse" />
-                  <div className="ml-auto h-8 w-1/2 rounded-lg bg-slate-800 animate-pulse" />
-                  <div className="h-8 w-3/4 rounded-lg bg-slate-800 animate-pulse" />
-                </div>
-              )}
 
-              {messagesError && (
-                <div className="rounded-xl border border-red-900/60 bg-red-950/30 p-3 text-sm text-red-200">
-                  <p>No se pudo cargar el historial del chat.</p>
-                  <button
-                    type="button"
-                    onClick={handleRetryLoadMessages}
-                    className="mt-2 text-xs font-semibold text-red-300 underline"
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              )}
-
-              {!isLoadingMessages &&
-                !messagesError &&
-                messages.map((msg) => {
-                  const isMine = msg.senderId === auth.currentUser?.uid;
-
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                    >
-                      <div className="max-w-[75%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
-                        {!isMine && (
-                          <p className="mb-1 text-xs text-slate-400">
-                            {msg.senderName}
-                          </p>
-                        )}
-                        <p>{msg.text}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-
-              <div ref={messagesEndRef} />
+            {/* ── AQUÍ ESTÁ LA MAGIA MODULAR (Historial) ── */}
+            <div className="flex-1 overflow-hidden">
+              <ChatHistory
+                roomId={roomId!}
+                currentUserId={auth.currentUser?.uid || ""}
+              />
             </div>
+
+            {/* ── INPUT PARA ENVIAR MENSAJES ── */}
             <div className="p-3 shrink-0">
               <div className="bg-[#1E1E1E] border border-gray-700 rounded-xl flex items-center pr-2">
                 <input
@@ -593,13 +587,13 @@ export default function Room() {
                   }}
                   placeholder="Escribe un mensaje..."
                   aria-label="Mensaje de chat"
-                  className="flex-1 bg-slate-800 text-white rounded-lg px-3 py-2 outline-none"
+                  className="flex-1 bg-transparent text-white rounded-lg px-3 py-2 outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleSendMessage}
                   aria-label="Enviar mensaje"
-                  className="p-2 text-sky-400 hover:text-sky-300"
+                  className="p-2 text-sky-400 hover:text-sky-300 transition-colors"
                 >
                   <Send size={20} aria-hidden="true" />
                 </button>
@@ -612,19 +606,33 @@ export default function Room() {
       {/* ── BARRA INFERIOR ── */}
       <div className="h-20 shrink-0 border-t border-gray-800 bg-[#121212] px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={toggleCamera}
-            className={`p-4 rounded-2xl transition-all ${isCameraOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
-            {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          <button
+            onClick={toggleCamera}
+            className={`p-4 rounded-2xl transition-all ${isCameraOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}
+          >
+            {isCameraOn ? (
+              <Video className="w-5 h-5" />
+            ) : (
+              <VideoOff className="w-5 h-5" />
+            )}
           </button>
-          <button onClick={toggleMicrophone}
-            className={`p-4 rounded-2xl transition-all ${isMicrophoneOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
-            {isMicrophoneOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          <button
+            onClick={toggleMicrophone}
+            className={`p-4 rounded-2xl transition-all ${isMicrophoneOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}
+          >
+            {isMicrophoneOn ? (
+              <Mic className="w-5 h-5" />
+            ) : (
+              <MicOff className="w-5 h-5" />
+            )}
           </button>
         </div>
 
         <div className="flex items-center gap-4">
-          <button onClick={toggleScreenShare}
-            className={`flex flex-col items-center gap-1.5 p-2 w-20 transition-colors ${isScreenSharing ? "text-sky-400" : "text-gray-400 hover:text-white"}`}>
+          <button
+            onClick={toggleScreenShare}
+            className={`flex flex-col items-center gap-1.5 p-2 w-20 transition-colors ${isScreenSharing ? "text-sky-400" : "text-gray-400 hover:text-white"}`}
+          >
             <MonitorUp className="w-5 h-5" />
             <span className="text-[10px] font-medium">
               {isScreenSharing ? "Dejar de presentar" : "Presentar"}
@@ -645,8 +653,10 @@ export default function Room() {
               </span>
             </div>
           </button>
-          <button onClick={() => setShowLeaveModal(true)}
-            className="p-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 transition-all">
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="p-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 transition-all"
+          >
             <PhoneOff className="w-5 h-5" />
           </button>
         </div>
@@ -660,7 +670,9 @@ export default function Room() {
               <div className="p-3 bg-red-500/10 text-red-500 rounded-xl">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-white">¿Salir de la sala?</h3>
+              <h3 className="text-lg font-bold text-white">
+                ¿Salir de la sala?
+              </h3>
             </div>
 
             <p className="text-sm text-gray-400 mb-6">
@@ -671,21 +683,30 @@ export default function Room() {
 
             <div className="flex flex-col gap-3">
               {isOwner && (
-                <button onClick={handleEndRoomForAll} disabled={isProcessing}
-                  className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50">
+                <button
+                  onClick={handleEndRoomForAll}
+                  disabled={isProcessing}
+                  className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
+                >
                   {isProcessing ? "Finalizando..." : "Finalizar para todos"}
                 </button>
               )}
-              <button onClick={handleLeaveOnly} disabled={isProcessing}
+              <button
+                onClick={handleLeaveOnly}
+                disabled={isProcessing}
                 className={`w-full py-3 px-4 font-bold rounded-xl transition-colors ${
                   isOwner
                     ? "bg-[#2A2A2A] text-white hover:bg-gray-700"
                     : "bg-red-600 hover:bg-red-700 text-white"
-                }`}>
+                }`}
+              >
                 Solo salir de la sala
               </button>
-              <button onClick={() => setShowLeaveModal(false)} disabled={isProcessing}
-                className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                disabled={isProcessing}
+                className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2"
+              >
                 Cancelar
               </button>
             </div>
