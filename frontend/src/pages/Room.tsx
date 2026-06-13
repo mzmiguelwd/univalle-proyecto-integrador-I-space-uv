@@ -1,10 +1,18 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection,
+  addDoc,
+  serverTimestamp, } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { endStudyRoom } from "../config/rooms";
 import { getUserProfile, type UserProfile } from "../config/auth";
-import ChatHistory from "../components/rooms/ChatHistory";
+type ChatMessage = {
+  id: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+  timestamp: string;
+};
 import {
   Mic,
   MicOff,
@@ -81,6 +89,9 @@ export default function Room() {
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
   // ── Cargar perfil ─────────────────────────────────────────
   useEffect(() => {
     const loadUser = async () => {
@@ -98,6 +109,42 @@ export default function Room() {
     avatar: profile?.avatar || null,
   }), [profile]);
 
+  //Scroll automatico al recibir un nuevo mensaje
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [messages]);
+
+  
+
+  // ── Función para chat
+  const handleSendMessage = async () => {
+    if (!roomId || !message.trim() || !auth.currentUser) return;
+
+    const newMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      text: message.trim(),
+      senderId: auth.currentUser.uid,
+      senderName: profile?.name || profile?.username || "Usuario",
+      timestamp: new Date().toISOString(),
+    };
+
+    socketRef.current?.emit("chat:send-message", {
+      roomId,
+      message: newMessage,
+    });
+
+    await addDoc(collection(db, "rooms", roomId, "messages"), {
+      text: newMessage.text,
+      senderId: newMessage.senderId,
+      senderName: newMessage.senderName,
+      timestamp: serverTimestamp(),
+    });
+
+    setMessage("");
+  };
+
   // ── Callback cuando el anfitrión cierra la sala ───────────
   const handleRoomEnded = () => {
     navigate("/dashboard");
@@ -110,6 +157,34 @@ export default function Room() {
     currentUser,
     handleRoomEnded, // ← invitado es redirigido automáticamente
   );
+
+  const [socketReady, setSocketReady] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (socketRef.current) {
+        setSocketReady(true);
+        clearInterval(interval);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [socketRef]);
+
+  // ── Listener de chat ─────────────
+  useEffect(() => {
+    if (!socketReady || !socketRef.current) return;
+
+    const handleNewMessage = (newMessage: ChatMessage) => {
+      setMessages((prev) => [...prev, newMessage]);
+    };
+
+    socketRef.current.on("chat:new-message", handleNewMessage);
+
+    return () => {
+      socketRef.current?.off("chat:new-message", handleNewMessage);
+    };
+  }, [socketReady]);
 
   // ── Verificar si es anfitrión ─────────────────────────────
   useEffect(() => {
@@ -396,23 +471,45 @@ export default function Room() {
             <div className="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
               <h3 className="font-mono text-sm font-bold text-gray-300">Chat de la Sala</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <ChatHistory
-                roomId={roomId ?? ""}
-                currentUserId={auth.currentUser?.uid ?? ""}
-              />
+            
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2 scrollbar-thin">
+              {messages.map((msg) => {
+                const isMine = msg.senderId === auth.currentUser?.uid;
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className="max-w-[75%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
+                      {!isMine && (
+                        <p className="mb-1 text-xs text-slate-400">
+                          {msg.senderName}
+                        </p>
+                      )}
+                      <p>{msg.text}</p>
+                    </div>
+                    <div ref={messagesEndRef} />
+                  </div>
+                );
+              })}
             </div>
             <div className="p-3 shrink-0">
               <div className="bg-[#1E1E1E] border border-gray-700 rounded-xl flex items-center pr-2">
                 <input
-                  type="text"
-                  placeholder="Escribe un mensaje..."
-                  className="bg-transparent flex-1 py-3 px-4 text-sm text-white focus:outline-none"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSendMessage();
+                  }}
+                  placeholder="Escribe un mensaje..."
+                  className="flex-1 bg-slate-800 text-white rounded-lg px-3 py-2 outline-none"
                 />
-                <button className="p-2 text-sky-400 hover:text-sky-300">
-                  <Send className="w-5 h-5" />
+                <button
+                  onClick={handleSendMessage}
+                  className="p-2 text-sky-400 hover:text-sky-300"
+                >
+                  <Send size={20} />
                 </button>
               </div>
             </div>

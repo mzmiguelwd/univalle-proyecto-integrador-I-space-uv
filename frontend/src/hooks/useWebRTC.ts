@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const SOCKET_SERVER_URL =
   import.meta.env.VITE_SOCKET_SERVER_URL || "http://localhost:3000";
@@ -10,6 +15,7 @@ const ICE_SERVERS = {
     { urls: "stun:stun1.l.google.com:19302" },
   ],
 };
+
 
 export type Participant = {
   id: string;
@@ -31,6 +37,8 @@ export const useWebRTC = (
 
   const socketRef    = useRef<Socket | null>(null);
   const peersRef     = useRef<{ [socketId: string]: RTCPeerConnection }>({});
+  const [socket, setSocket] = useState<Socket | null>(null);
+
 
   // ── Crear conexión WebRTC con un peer ─────────────────────
   const createPeerConnection = useCallback(
@@ -88,8 +96,12 @@ export const useWebRTC = (
       return;
     }
 
-    socketRef.current = io(SOCKET_SERVER_URL);
-    const socket = socketRef.current;
+    const socketInstance = io(SOCKET_SERVER_URL);
+
+    socketRef.current = socketInstance;
+    setSocket(socketInstance);
+
+    const socket = socketInstance;
 
     socket.on("connect", () => {
       console.info("Socket connected", { socketId: socket.id, roomId, url: SOCKET_SERVER_URL });
@@ -222,5 +234,5 @@ export const useWebRTC = (
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStream, screenStream]);
 
-  return { remoteStreams, participants, socketRef, cleanup };
+  return { remoteStreams, participants, socketRef, socket, cleanup };
 };
