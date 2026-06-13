@@ -6,7 +6,6 @@ import {
   collection,
   addDoc,
   serverTimestamp,
-  getDocs,
   query,
   orderBy,
   limit,
@@ -115,9 +114,6 @@ export default function Room() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [messagesError, setMessagesError] = useState<string | null>(null);
-  const messageInputRef = useRef<HTMLInputElement | null>(null);
 
   // ── Cargar perfil ─────────────────────────────────────────
   useEffect(() => {
@@ -169,9 +165,6 @@ export default function Room() {
   useEffect(() => {
     if (!roomId) return;
 
-    setIsLoadingMessages(true);
-    setMessagesError(null);
-
     const messagesRef = collection(db, "rooms", roomId, "messages");
     const messagesQuery = query(
       messagesRef,
@@ -193,12 +186,9 @@ export default function Room() {
           };
         });
         setMessages(loadedMessages);
-        setIsLoadingMessages(false);
       },
       (error) => {
         console.error("Error escuchando historial en vivo:", error);
-        setMessagesError("No se pudo conectar al chat.");
-        setIsLoadingMessages(false);
       },
     );
 
