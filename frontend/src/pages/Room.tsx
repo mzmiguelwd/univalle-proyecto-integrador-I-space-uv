@@ -120,11 +120,13 @@ export default function Room() {
 
   // ── Función para chat
   const handleSendMessage = async () => {
-    if (!roomId || !message.trim() || !auth.currentUser) return;
+    const cleanText = message.trim().replace(/[<>]/g, "");
+
+    if (!roomId || !cleanText || !auth.currentUser) return;
 
     const newMessage: ChatMessage = {
       id: crypto.randomUUID(),
-      text: message.trim(),
+      text: cleanText,
       senderId: auth.currentUser.uid,
       senderName: profile?.name || profile?.username || "Usuario",
       timestamp: new Date().toISOString(),
