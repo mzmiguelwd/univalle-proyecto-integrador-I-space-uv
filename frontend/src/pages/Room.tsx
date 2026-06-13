@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, collection,
-  addDoc,
-  serverTimestamp, } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc,  serverTimestamp,getDocs, query, orderBy, limit, } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 import { endStudyRoom } from "../config/rooms";
 import { getUserProfile, type UserProfile } from "../config/auth";
@@ -91,6 +89,8 @@ export default function Room() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
 
   // ── Cargar perfil ─────────────────────────────────────────
   useEffect(() => {
@@ -146,6 +146,54 @@ export default function Room() {
 
     setMessage("");
   };
+
+  //--─ Cargar historial de chat al entrar ───────────────────────
+  const handleRetryLoadMessages = () => {
+    loadMessagesHistory();
+  };
+
+  // ── Función para cargar el historial de mensajes (US11) ─────────
+  const loadMessagesHistory = async () => {
+    if (!roomId) return;
+
+    try {
+      setIsLoadingMessages(true);
+      setMessagesError(null);
+
+      const messagesRef = collection(db, "rooms", roomId, "messages");
+
+      const messagesQuery = query(
+        messagesRef,
+        orderBy("timestamp", "asc"),
+        limit(50),
+      );
+
+      const snapshot = await getDocs(messagesQuery);
+
+      const loadedMessages: ChatMessage[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          text: data.text || "",
+          senderId: data.senderId || "",
+          senderName: data.senderName || "Usuario",
+          timestamp: data.timestamp?.toDate?.()?.toISOString?.() || "",
+        };
+      });
+
+      setMessages(loadedMessages);
+    } catch (error) {
+      console.error("Error cargando historial:", error);
+      setMessagesError("No se pudo cargar el historial del chat.");
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMessagesHistory();
+  }, [roomId]);
 
   // ── Callback cuando el anfitrión cierra la sala ───────────
   const handleRoomEnded = () => {
@@ -474,27 +522,51 @@ export default function Room() {
               <h3 className="font-mono text-sm font-bold text-gray-300">Chat de la Sala</h3>
             </div>
             
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2 scrollbar-thin">
-              {messages.map((msg) => {
-                const isMine = msg.senderId === auth.currentUser?.uid;
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2">
+              {isLoadingMessages && (
+                <div className="space-y-3">
+                  <div className="h-8 w-2/3 rounded-lg bg-slate-800 animate-pulse" />
+                  <div className="ml-auto h-8 w-1/2 rounded-lg bg-slate-800 animate-pulse" />
+                  <div className="h-8 w-3/4 rounded-lg bg-slate-800 animate-pulse" />
+                </div>
+              )}
 
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+              {messagesError && (
+                <div className="rounded-xl border border-red-900/60 bg-red-950/30 p-3 text-sm text-red-200">
+                  <p>No se pudo cargar el historial del chat.</p>
+                  <button
+                    type="button"
+                    onClick={handleRetryLoadMessages}
+                    className="mt-2 text-xs font-semibold text-red-300 underline"
                   >
-                    <div className="max-w-[75%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
-                      {!isMine && (
-                        <p className="mb-1 text-xs text-slate-400">
-                          {msg.senderName}
-                        </p>
-                      )}
-                      <p>{msg.text}</p>
+                    Reintentar
+                  </button>
+                </div>
+              )}
+
+              {!isLoadingMessages &&
+                !messagesError &&
+                messages.map((msg) => {
+                  const isMine = msg.senderId === auth.currentUser?.uid;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                    >
+                      <div className="max-w-[75%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
+                        {!isMine && (
+                          <p className="mb-1 text-xs text-slate-400">
+                            {msg.senderName}
+                          </p>
+                        )}
+                        <p>{msg.text}</p>
+                      </div>
                     </div>
-                    <div ref={messagesEndRef} />
-                  </div>
-                );
-              })}
+                  );
+                })}
+
+              <div ref={messagesEndRef} />
             </div>
             <div className="p-3 shrink-0">
               <div className="bg-[#1E1E1E] border border-gray-700 rounded-xl flex items-center pr-2">
