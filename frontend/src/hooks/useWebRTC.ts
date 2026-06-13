@@ -188,28 +188,23 @@ export const useWebRTC = (
     }
 
     participants.forEach((participant) => {
-      if (participant.peerId) {
-        if (callsRef.current[participant.peerId]) {
-          callsRef.current[participant.peerId].close();
+      const targetPeerId = participant.peerId;
+
+      if (targetPeerId) {
+        if (callsRef.current[targetPeerId]) {
+          callsRef.current[targetPeerId].close();
         }
 
-        const newCall = peerRef.current!.call(
-          participant.peerId,
-          currentLocalStream,
-        );
+        const newCall = peerRef.current!.call(targetPeerId, currentLocalStream);
 
         newCall.on("stream", (userVideoStream) => {
           setRemoteStreams((prev) => {
-            const filtered = prev.filter((s) => s.id !== participant.peerId);
-            return [
-              ...filtered,
-              { id: participant.peerId, stream: userVideoStream },
-            ];
+            const filtered = prev.filter((s) => s.id !== targetPeerId);
+            return [...filtered, { id: targetPeerId, stream: userVideoStream }];
           });
         });
 
-        // Guardamos la nueva referencia
-        callsRef.current[participant.peerId] = newCall;
+        callsRef.current[targetPeerId] = newCall;
       }
     });
 
