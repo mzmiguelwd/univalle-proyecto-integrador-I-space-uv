@@ -91,6 +91,7 @@ export default function Room() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
 
   // ── Cargar perfil ─────────────────────────────────────────
   useEffect(() => {
@@ -122,7 +123,16 @@ export default function Room() {
   const handleSendMessage = async () => {
     const cleanText = message.trim().replace(/[<>]/g, "");
 
+    console.log("SEND DEBUG", {
+      roomId,
+      cleanText,
+      authUser: auth.currentUser?.uid,
+      socketConnected: socketRef.current?.connected,
+    });
+
     if (!roomId || !cleanText || !auth.currentUser) return;
+
+    
 
     const newMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -136,6 +146,8 @@ export default function Room() {
       roomId,
       message: newMessage,
     });
+
+    setMessages((prev) => [...prev, newMessage]);
 
     await addDoc(collection(db, "rooms", roomId, "messages"), {
       text: newMessage.text,
