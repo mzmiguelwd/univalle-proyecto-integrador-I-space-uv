@@ -136,7 +136,7 @@ io.on("connection", (socket: Socket) => {
   socket.on("chat:send-message", ({ roomId, message }) => {
     if (!roomId || !message?.text) return;
 
-    io.to(roomId).emit("chat:new-message", message);
+    socket.to(roomId).emit("chat:new-message", message);
   });
 
   // 5. Handle disconnections

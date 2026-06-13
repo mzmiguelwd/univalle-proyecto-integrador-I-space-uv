@@ -502,16 +502,22 @@ export default function Room() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendMessage();
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
                   }}
                   placeholder="Escribe un mensaje..."
+                  aria-label="Mensaje de chat"
                   className="flex-1 bg-slate-800 text-white rounded-lg px-3 py-2 outline-none"
                 />
                 <button
+                  type="button"
                   onClick={handleSendMessage}
+                  aria-label="Enviar mensaje"
                   className="p-2 text-sky-400 hover:text-sky-300"
                 >
-                  <Send size={20} />
+                  <Send size={20} aria-hidden="true" />
                 </button>
               </div>
             </div>
