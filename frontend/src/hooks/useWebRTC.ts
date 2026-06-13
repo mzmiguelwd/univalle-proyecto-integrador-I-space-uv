@@ -1,192 +1,220 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import Peer, { type MediaConnection } from "peerjs";
 
 const SOCKET_SERVER_URL =
   import.meta.env.VITE_SOCKET_SERVER_URL || "http://localhost:3000";
 
-// Public Google STUN servers for NAT traversal
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
+const url = new URL(SOCKET_SERVER_URL);
+const peerHost = url.hostname;
+let peerPort;
+if (url.port) {
+  peerPort = Number.parseInt(url.port);
+} else if (url.protocol === "https:") {
+  peerPort = 443;
+} else {
+  peerPort = 80;
+}
+
+const PEERJS_CONFIG = {
+  host: peerHost,
+  port: peerPort,
+  path: "/peerjs",
+  secure: url.protocol === "https:",
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ],
+  },
+};
+
+export type Participant = {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  peerId?: string;
 };
 
 export const useWebRTC = (
   roomId: string,
   localStream: MediaStream | null,
   screenStream: MediaStream | null,
+  currentUser: { uid: string; name: string; avatar?: string | null },
+  onRoomEnded?: () => void,
 ) => {
   const [remoteStreams, setRemoteStreams] = useState<
     { id: string; stream: MediaStream }[]
   >([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+
   const socketRef = useRef<Socket | null>(null);
-  const peersRef = useRef<{ [socketId: string]: RTCPeerConnection }>({});
+  const peerRef = useRef<Peer | null>(null);
+  const callsRef = useRef<{ [peerId: string]: MediaConnection }>({});
 
-  const createPeerConnection = (userId: string, socket: Socket) => {
-    const peerConnection = new RTCPeerConnection(ICE_SERVERS);
-
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit("webrtc-ice-candidate", {
-          candidate: event.candidate,
-          to: userId,
-        });
-      }
-    };
-
-    peerConnection.ontrack = (event) => {
-      setRemoteStreams((prevStreams) => {
-        const stream = event.streams[0];
-        // Evitar duplicados por id
-        if (prevStreams.some((s) => s.id === userId)) return prevStreams;
-        return [...prevStreams, { id: userId, stream }];
-      });
-    };
-
-    peerConnection.onnegotiationneeded = async () => {
-      try {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit("webrtc-offer", { offer, to: userId });
-      } catch (error) {
-        console.error("Error during negotiation:", error);
-      }
-    };
-
-    return peerConnection;
-  };
+  const currentLocalStreamRef = useRef(localStream);
+  const currentScreenStreamRef = useRef(screenStream);
 
   useEffect(() => {
-    // 1. Connect to Socket.IO
-      socketRef.current = io(SOCKET_SERVER_URL);
-      const socket = socketRef.current;
+    currentLocalStreamRef.current = localStream;
+    currentScreenStreamRef.current = screenStream;
+  }, [localStream, screenStream]);
 
-      // 2. Join the specified room
-      socket.emit("join-room", roomId);
+  const getCombinedStream = useCallback(() => {
+    const combined = new MediaStream();
+    if (currentLocalStreamRef.current) {
+      currentLocalStreamRef.current
+        .getTracks()
+        .forEach((t) => combined.addTrack(t));
+    }
+    if (currentScreenStreamRef.current) {
+      currentScreenStreamRef.current
+        .getTracks()
+        .forEach((t) => combined.addTrack(t));
+    }
+    return combined;
+  }, []);
 
-      // 3. When a new user connects, create and send an offer
-      socket.on("user-connected", async (newUserId: string) => {
-        const peerConnection = createPeerConnection(newUserId, socket);
-        peersRef.current[newUserId] = peerConnection;
+  const cleanupPeerConnections = useCallback(() => {
+    socketRef.current?.disconnect();
+    peerRef.current?.destroy();
+    Object.values(callsRef.current).forEach((call) => call.close());
+    callsRef.current = {};
+    setRemoteStreams([]);
+    setParticipants([]);
+  }, []);
 
-        if (localStream) {
-          localStream
-            .getTracks()
-            .forEach((track) => peerConnection.addTrack(track, localStream));
-        }
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit("webrtc-offer", { offer, to: newUserId });
-      });
+  useEffect(() => {
+    if (!roomId || !currentUser.uid) return;
 
-      // 4. Receive an offer and respond with an answer
-      socket.on("webrtc-offer", async ({ offer, from }) => {
-        // Si la conexión ya existe (renegociación), la reusamos. Si no, la creamos.
-        let peerConnection = peersRef.current[from];
-        if (!peerConnection) {
-          peerConnection = createPeerConnection(from, socket);
-          peersRef.current[from] = peerConnection;
-        }
+    const socket = io(SOCKET_SERVER_URL);
+    socketRef.current = socket;
 
-        await peerConnection.setRemoteDescription(
-          new RTCSessionDescription(offer),
-        );
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        socket.emit("webrtc-answer", { answer, to: from });
-      });
+    const peer = new Peer(PEERJS_CONFIG);
+    peerRef.current = peer;
 
-      // 5. Receive an answer and establish connection
-      socket.on(
-        "webrtc-answer",
-        async ({
-          answer,
-          from,
-        }: {
-          answer: RTCSessionDescriptionInit;
-          from: string;
-        }) => {
-          const peerConnection = peersRef.current[from];
-          if (peerConnection) {
-            await peerConnection.setRemoteDescription(
-              new RTCSessionDescription(answer),
-            );
-          }
+    peer.on("open", (myPeerId) => {
+      console.info("PeerJS connected with ID:", myPeerId);
+
+      socket.emit("join-room", {
+        roomId,
+        user: {
+          uid: currentUser.uid,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          peerId: myPeerId,
         },
-      );
-
-      // 6. Receive network routes (ICE Candidates)
-      // FIX: Changed event name from "webrtc-candidate" to "webrtc-ice-candidate" to match server
-      socket.on(
-        "webrtc-ice-candidate",
-        async ({
-          candidate,
-          from,
-        }: {
-          candidate: RTCIceCandidateInit;
-          from: string;
-        }) => {
-          const peerConnection = peersRef.current[from];
-          if (peerConnection) {
-            await peerConnection.addIceCandidate(
-              new RTCIceCandidate(candidate),
-            );
-          }
-        },
-      );
-
-      // 7. Cleanup when a user disconnects
-      socket.on("user-disconnected", (userId: string) => {
-        if (peersRef.current[userId]) {
-          peersRef.current[userId].close();
-          delete peersRef.current[userId];
-        }
-        setRemoteStreams((prevStreams) =>
-          prevStreams.filter((stream) => stream.id !== userId),
-        );
       });
+    });
 
-      return () => {
-        socket.disconnect();
-        Object.values(peersRef.current).forEach((peer) => peer.close());
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [roomId]);
+    peer.on("call", (call) => {
+      call.answer(getCombinedStream());
 
-    // 2. Efecto Sincronizador: Observa tus cámaras y pantallas y las inyecta a la llamada
-    useEffect(() => {
-      const allStreams = [localStream, screenStream].filter(
-        Boolean,
-      ) as MediaStream[];
-      const currentTrackIds = new Set<string>();
-
-      // Agrega los nuevos videos que hayas encendido
-      allStreams.forEach((stream) => {
-        stream.getTracks().forEach((track) => {
-          currentTrackIds.add(track.id);
-          Object.values(peersRef.current).forEach((pc) => {
-            const senders = pc.getSenders();
-            const alreadySending = senders.some(
-              (sender) => sender.track?.id === track.id,
-            );
-            if (!alreadySending) {
-              pc.addTrack(track, stream);
-            }
-          });
+      call.on("stream", (userVideoStream) => {
+        setRemoteStreams((prev) => {
+          if (prev.some((s) => s.id === call.peer)) return prev;
+          return [...prev, { id: call.peer, stream: userVideoStream }];
         });
       });
 
-    // Remueve los videos que hayas apagado
-    Object.values(peersRef.current).forEach((pc) => {
-      pc.getSenders().forEach((sender) => {
-        if (sender.track && !currentTrackIds.has(sender.track.id)) {
-          pc.removeTrack(sender);
-        }
-      });
+      callsRef.current[call.peer] = call;
     });
+
+    socket.on("room-users", (users: any[]) => {
+      const participantsList = users.map((u) => ({
+        id: u.socketId,
+        name: u.name || u.user?.name || "Usuario",
+        avatar: u.avatar ?? u.user?.avatar ?? null,
+        peerId: u.peerId,
+      }));
+      setParticipants(participantsList);
+    });
+
+    socket.on("user-connected", ({ socketId, name, avatar, peerId }) => {
+      setParticipants((prev) => [
+        ...prev,
+        { id: socketId, name: name || "Usuario", avatar, peerId },
+      ]);
+
+      if (peerId) {
+        const call = peer.call(peerId, getCombinedStream());
+
+        call.on("stream", (userVideoStream) => {
+          setRemoteStreams((prev) => {
+            if (prev.some((s) => s.id === peerId)) return prev;
+            return [...prev, { id: peerId, stream: userVideoStream }];
+          });
+        });
+
+        callsRef.current[peerId] = call;
+      }
+    });
+
+    socket.on(
+      "user-disconnected",
+      (userId: string, disconnectedPeerId: string) => {
+        setParticipants((prev) => prev.filter((p) => p.id !== userId));
+
+        if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
+          callsRef.current[disconnectedPeerId].close();
+          delete callsRef.current[disconnectedPeerId];
+          setRemoteStreams((prev) =>
+            prev.filter((s) => s.id !== disconnectedPeerId),
+          );
+        }
+      },
+    );
+
+    socket.on("room-ended", () => {
+      cleanupPeerConnections();
+      onRoomEnded?.();
+    });
+
+    return () => {
+      cleanupPeerConnections();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, currentUser.uid]);
+
+  useEffect(() => {
+    if (!peerRef.current || participants.length === 0) return;
+
+    const currentLocalStream = localStream || new MediaStream();
+
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => {
+        currentLocalStream.addTrack(track);
+      });
+    }
+
+    participants.forEach((participant) => {
+      if (participant.peerId) {
+        if (callsRef.current[participant.peerId]) {
+          callsRef.current[participant.peerId].close();
+        }
+
+        const newCall = peerRef.current!.call(
+          participant.peerId,
+          currentLocalStream,
+        );
+
+        newCall.on("stream", (userVideoStream) => {
+          setRemoteStreams((prev) => {
+            const filtered = prev.filter((s) => s.id !== participant.peerId);
+            return [
+              ...filtered,
+              { id: participant.peerId, stream: userVideoStream },
+            ];
+          });
+        });
+
+        // Guardamos la nueva referencia
+        callsRef.current[participant.peerId] = newCall;
+      }
+    });
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStream, screenStream]);
 
-  return { remoteStreams };
+  return { remoteStreams, participants, socketRef, cleanupPeerConnections };
 };

@@ -3,10 +3,10 @@ import http from "http";
 import { Server, Socket } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
+import { ExpressPeerServer } from "peer";
 
 import setupSwagger from "./docs/swaggerConfig";
 
-// Load environment variables from .env file
 dotenv.config();
 
 const app: Application = express();
@@ -17,7 +17,6 @@ const cleanClientUrl = rawClientUrl.endsWith("/")
   ? rawClientUrl.slice(0, -1)
   : rawClientUrl;
 
-// CORS configuration
 const corsOptions = {
   origin: ["http://localhost:5173", cleanClientUrl],
   methods: ["GET", "POST"],
@@ -26,8 +25,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
-
-// Setup Swagger documentation
 setupSwagger(app, PORT);
 
 // Initialize HTTP server and WebSocket server
@@ -36,68 +33,75 @@ const io = new Server(server, {
   cors: corsOptions,
 });
 
-// Listen for WebSocket connections
+const peerServer = ExpressPeerServer(server, {
+  path: "/",
+  allow_discovery: true,
+});
+
+app.use("/peerjs", peerServer);
+
+peerServer.on("connection", (client) => {
+  console.log(`PeerJS: Cliente conectado con PeerID: ${client.getId()}`);
+});
+
+peerServer.on("disconnect", (client) => {
+  console.log(`PeerJS: Cliente desconectado: ${client.getId()}`);
+});
+
+// Listening for WebSocket connections (Socket.IO)
 io.on("connection", (socket: Socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`Usuario conectado (Socket.IO): ${socket.id}`);
 
-  // Send a localized welcome message back to the client
-  socket.emit("welcome", {
-    status: "success",
-    message: "Conectado exitosamente al servidor Node.js con Socket.IO",
-    socketId: socket.id,
-  });
-
-  // --- ROOMS & WEBRTC LOGIC ---
-
-  // 1. User joins a specific room
-  socket.on("join-room", (roomId: string) => {
+  socket.on("join-room", async ({ roomId, user }) => {
     socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
+    console.log(
+      `Socket ${socket.id} se unió a la sala ${roomId} con PeerID: ${user.peerId}`,
+    );
 
-    // Notify others in the room that a new user has joined
-    socket.to(roomId).emit("user-connected", socket.id);
-  });
+    socket.data.roomId = roomId;
+    socket.data.peerId = user.peerId;
+    socket.data.name = user.name;
+    socket.data.avatar = user.avatar;
 
-  // 2. Offer exchange (Call initiator)
-  socket.on("webrtc-offer", ({ offer, to }: { offer: any; to: string }) => {
-    // Relay the offer to the specific recipient
-    socket.to(to).emit("webrtc-offer", { offer, from: socket.id });
-  });
-
-  // 3. Answer exchange (Call receiver)
-  socket.on("webrtc-answer", ({ answer, to }: { answer: any; to: string }) => {
-    // Relay the answer back to the offer initiator
-    socket.to(to).emit("webrtc-answer", { answer, from: socket.id });
-  });
-
-  // 4. ICE Candidates exchange (Network routing)
-  socket.on(
-    "webrtc-ice-candidate",
-    ({ candidate, to }: { candidate: any; to: string }) => {
-      // Relay the network paths to establish Peer-to-Peer connection
-      socket
-        .to(to)
-        .emit("webrtc-ice-candidate", { candidate, from: socket.id });
-    },
-  );
-
-  // 5. Handle disconnections
-  // Using 'disconnecting' instead of 'disconnect' to access the rooms the socket belongs to before leaving
-  socket.on("disconnecting", () => {
-    socket.rooms.forEach((room) => {
-      if (room !== socket.id) {
-        // Notify everyone in the room that this user is leaving
-        socket.to(room).emit("user-disconnected", socket.id);
-      }
+    socket.to(roomId).emit("user-connected", {
+      socketId: socket.id,
+      name: user.name,
+      avatar: user.avatar,
+      peerId: user.peerId,
     });
+
+    const sockets = await io.in(roomId).fetchSockets();
+    const existingUsers = sockets
+      .filter((s) => s.id !== socket.id)
+      .map((s) => ({
+        socketId: s.id,
+        name: s.data.name || "Usuario",
+        avatar: s.data.avatar || null,
+        peerId: s.data.peerId,
+      }));
+
+    socket.emit("room-users", existingUsers);
+  });
+
+  socket.on("end-room", async ({ roomId }) => {
+    console.log(`Anfitrión (${socket.id}) finalizó la sala: ${roomId}`);
+    socket.to(roomId).emit("room-ended");
+  });
+
+  socket.on("disconnecting", () => {
+    const roomId = socket.data.roomId;
+    const peerId = socket.data.peerId;
+    if (roomId) {
+      socket.to(roomId).emit("user-disconnected", socket.id, peerId);
+    }
   });
 
   socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
+    console.log(`Usuario desconectado (Socket.IO): ${socket.id}`);
   });
 });
 
-// Start the server
 server.listen(PORT, () => {
-  console.log(`Backend server running on port ${PORT}`);
+  console.log(`Servidor backend corriendo en el puerto ${PORT}`);
+  console.log(`Servidor PeerJS activo en http://localhost:${PORT}/peerjs`);
 });
