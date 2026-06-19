@@ -62,6 +62,7 @@ export default function Room() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -217,6 +218,7 @@ export default function Room() {
   const toggleCamera = async () => {
     if (!isCameraOn) {
       try {
+        setPermissionError(null);
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: isMicrophoneOn,
@@ -225,30 +227,56 @@ export default function Room() {
         setMyStream(stream);
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
         setIsCameraOn(true);
-        emitMediaState(isMicrophoneOn, true);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error al acceder a la cámara:", err);
+        setPermissionError(
+          "Permiso de cámara denegado. Por favor, habilítalo en la configuración de tu navegador.",
+        );
       }
     } else {
-      myStream?.getTracks().forEach((t) => t.stop());
-      setMyStream(null);
-      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      myStream?.getVideoTracks().forEach((t) => t.stop());
       setIsCameraOn(false);
-      emitMediaState(isMicrophoneOn, false);
+
+      if (!isMicrophoneOn) {
+        setMyStream(null);
+        if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      }
     }
   };
 
   // ── Micrófono ─────────────────────────────────────────────
-  // FIX: calcular newState antes de usarla en emitMediaState
-  const toggleMicrophone = () => {
-    const newState = !isMicrophoneOn;
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach((t) => {
-        t.enabled = newState;
-      });
+  const toggleMicrophone = async () => {
+    if (!isMicrophoneOn) {
+      if (!localStreamRef.current) {
+        try {
+          setPermissionError(null);
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+          localStreamRef.current = stream;
+          setMyStream(stream);
+          setIsMicrophoneOn(true);
+        } catch (err) {
+          console.error("Error al acceder al micrófono:", err);
+          setPermissionError(
+            "Permiso de micrófono denegado. Por favor, habilítalo en tu navegador.",
+          );
+        }
+      } else {
+        localStreamRef.current.getAudioTracks().forEach((t) => {
+          t.enabled = true;
+        });
+        setIsMicrophoneOn(true);
+      }
+    } else {
+      if (localStreamRef.current) {
+        localStreamRef.current.getAudioTracks().forEach((t) => {
+          t.enabled = false;
+        });
+      }
+      setIsMicrophoneOn(false);
     }
-    setIsMicrophoneOn(newState);
-    emitMediaState(newState, isCameraOn);
   };
 
   // ── Pantalla compartida ───────────────────────────────────
@@ -340,6 +368,23 @@ export default function Room() {
           )}
         </div>
       </div>
+
+      {/* ── ALERTA DE PERMISOS DENEGADOS ── */}
+      {permissionError && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-red-600/90 border border-red-400 text-white px-6 py-3 rounded-xl z-50 flex items-center gap-4 shadow-2xl backdrop-blur-sm animate-in slide-in-from-top-4">
+          <AlertTriangle className="w-5 h-5 text-red-200 shrink-0" />
+          <span className="text-sm font-medium">{permissionError}</span>
+          <button
+            onClick={() => setPermissionError(null)}
+            className="p-1 hover:bg-red-700 rounded-lg transition-colors"
+          >
+            <span className="sr-only">Cerrar</span>
+            <div className="w-4 h-4 flex items-center justify-center font-bold">
+              ✕
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* ── ÁREA PRINCIPAL ── */}
       <div className="flex-1 flex overflow-hidden p-4 gap-4">
