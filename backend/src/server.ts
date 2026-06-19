@@ -83,6 +83,15 @@ io.on("connection", (socket: Socket) => {
     socket.emit("room-users", existingUsers);
   });
 
+  socket.on("media-state", ({ roomId, micOn, camOn }) => {
+    // Re-emitir a todos en la sala excepto al emisor
+    socket.to(roomId).emit("media-state", {
+      socketId: socket.id,
+      micOn,
+      camOn,
+    });
+  });
+  
   socket.on("end-room", async ({ roomId }) => {
     console.log(`Anfitrión (${socket.id}) finalizó la sala: ${roomId}`);
     socket.to(roomId).emit("room-ended");
