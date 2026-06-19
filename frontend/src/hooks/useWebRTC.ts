@@ -34,8 +34,8 @@ export type Participant = {
   name: string;
   avatar?: string | null;
   peerId?: string;
-  micOn: boolean;   // ← nuevo
-  camOn: boolean;   // ← nuevo (útil para indicador visual futuro)
+  micOn: boolean; // ← nuevo
+  camOn: boolean; // ← nuevo (útil para indicador visual futuro)
 };
 
 export const useWebRTC = (
@@ -185,9 +185,7 @@ export const useWebRTC = (
         camOn: boolean;
       }) => {
         setParticipants((prev) =>
-          prev.map((p) =>
-            p.id === socketId ? { ...p, micOn, camOn } : p,
-          ),
+          prev.map((p) => (p.id === socketId ? { ...p, micOn, camOn } : p)),
         );
       },
     );
@@ -263,6 +261,6 @@ export const useWebRTC = (
     participants,
     socketRef,
     cleanupPeerConnections,
-    emitMediaState,  // ← exportar para usarlo en Room.tsx
+    emitMediaState, // ← exportar para usarlo en Room.tsx
   };
 };

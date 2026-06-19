@@ -48,7 +48,7 @@ export default function Room() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   const [isMicrophoneOn, setIsMicrophoneOn] = useState(false); // apagado por defecto
-  const [isCameraOn, setIsCameraOn] = useState(false);         // apagado por defecto
+  const [isCameraOn, setIsCameraOn] = useState(false); // apagado por defecto
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [message, setMessage] = useState("");
   const [hasCopiedId, setHasCopiedId] = useState(false);
@@ -104,8 +104,13 @@ export default function Room() {
 
   useEffect(() => {
     if (!roomId) return;
+
     const messagesRef = collection(db, "rooms", roomId, "messages");
-    const messagesQuery = query(messagesRef, orderBy("timestamp", "asc"), limit(100));
+    const messagesQuery = query(
+      messagesRef,
+      orderBy("timestamp", "asc"),
+      limit(100),
+    );
     const unsubscribe = onSnapshot(
       messagesQuery,
       (snapshot) => {
@@ -130,8 +135,13 @@ export default function Room() {
 
   const handleRoomEnded = () => navigate("/dashboard");
 
-  const { remoteStreams, participants, socketRef, cleanupPeerConnections, emitMediaState } =
-    useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
+  const {
+    remoteStreams,
+    participants,
+    socketRef,
+    cleanupPeerConnections,
+    emitMediaState,
+  } = useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
 
   const [socketReady, setSocketReady] = useState(false);
 
@@ -161,7 +171,10 @@ export default function Room() {
       if (!roomId || !auth.currentUser) return;
       try {
         const roomDoc = await getDoc(doc(db, "rooms", roomId));
-        if (roomDoc.exists() && roomDoc.data().ownerId === auth.currentUser.uid) {
+        if (
+          roomDoc.exists() &&
+          roomDoc.data().ownerId === auth.currentUser.uid
+        ) {
           setIsOwner(true);
         }
       } catch (err) {
@@ -242,7 +255,9 @@ export default function Room() {
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+        });
         setIsScreenSharing(true);
         setScreenStream(stream);
         setTimeout(() => {
@@ -265,7 +280,9 @@ export default function Room() {
   };
 
   useEffect(() => {
-    return () => { stopAllStreams(); };
+    return () => {
+      stopAllStreams();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -296,11 +313,23 @@ export default function Room() {
       <div className="h-14 shrink-0 bg-[#121212] border-b border-gray-800 flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-sm font-medium">ID de la Sala:</span>
+            <span className="text-gray-400 text-sm font-medium">
+              ID de la Sala:
+            </span>
             <div className="flex items-center bg-[#1A1A1A] border border-gray-700 rounded-lg px-3 py-1.5 gap-3">
-              <span className="text-sky-300 font-mono text-sm tracking-wide">{roomId}</span>
-              <button onClick={copyRoomId} className="text-gray-400 hover:text-white transition-colors" title="Copiar ID">
-                {hasCopiedId ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+              <span className="text-sky-300 font-mono text-sm tracking-wide">
+                {roomId}
+              </span>
+              <button
+                onClick={copyRoomId}
+                className="text-gray-400 hover:text-white transition-colors"
+                title="Copiar ID"
+              >
+                {hasCopiedId ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -317,9 +346,18 @@ export default function Room() {
         {/* Pantalla compartida / área central */}
         <div className="flex-1 bg-[#1A1A1A] rounded-2xl overflow-hidden relative border border-gray-800 flex flex-col">
           {isScreenSharing ? (
-            <video ref={screenVideoRef} autoPlay playsInline muted className="w-full h-full object-contain bg-black" />
+            <video
+              ref={screenVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-contain bg-black"
+            />
           ) : remoteStreams.length > 0 ? (
-            <RemoteVideo stream={remoteStreams[remoteStreams.length - 1].stream} className="w-full h-full object-contain bg-black" />
+            <RemoteVideo
+              stream={remoteStreams[remoteStreams.length - 1].stream}
+              className="w-full h-full object-contain bg-black"
+            />
           ) : (
             <div className="absolute inset-0 bg-linear-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
               <pre className="text-sky-500/30 font-mono text-sm sm:text-lg md:text-2xl p-8 opacity-50 select-none">
@@ -329,13 +367,16 @@ export default function Room() {
           )}
           <div className="absolute bottom-4 left-4 bg-[#0A304E] text-sky-200 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 z-10">
             <MonitorUp className="w-4 h-4" />
-            {isScreenSharing ? "Tu presentación" : remoteStreams.length > 0 ? "Viendo presentación externa" : "El área está libre"}
+            {isScreenSharing
+              ? "Tu presentación"
+              : remoteStreams.length > 0
+                ? "Viendo presentación externa"
+                : "El área está libre"}
           </div>
         </div>
 
         {/* Barra lateral derecha */}
         <div className="w-80 lg:w-[380px] flex flex-col gap-4">
-
           {/* FIX: solo ParticipantsGrid, sin el .map() duplicado debajo */}
           <ParticipantsGrid
             profile={profile}
@@ -349,10 +390,15 @@ export default function Room() {
           {/* Panel de Chat */}
           <div className="flex-1 bg-[#121212] rounded-2xl border border-gray-800 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-gray-800 flex justify-between items-center shrink-0">
-              <h3 className="font-mono text-sm font-bold text-gray-300">Chat de la Sala</h3>
+              <h3 className="font-mono text-sm font-bold text-gray-300">
+                Chat de la Sala
+              </h3>
             </div>
             <div className="flex-1 overflow-hidden">
-              <ChatHistory roomId={roomId!} currentUserId={auth.currentUser?.uid || ""} />
+              <ChatHistory
+                roomId={roomId!}
+                currentUserId={auth.currentUser?.uid || ""}
+              />
             </div>
             <div className="p-3 shrink-0">
               <div className="bg-[#1E1E1E] border border-gray-700 rounded-xl flex items-center pr-2">
@@ -369,31 +415,54 @@ export default function Room() {
                   aria-label="Mensaje de chat"
                   className="flex-1 bg-transparent text-white rounded-lg px-3 py-2 outline-none"
                 />
-                <button type="button" onClick={handleSendMessage} aria-label="Enviar mensaje" className="p-2 text-sky-400 hover:text-sky-300 transition-colors">
+                <button
+                  type="button"
+                  onClick={handleSendMessage}
+                  aria-label="Enviar mensaje"
+                  className="p-2 text-sky-400 hover:text-sky-300 transition-colors"
+                >
                   <Send size={20} aria-hidden="true" />
                 </button>
               </div>
             </div>
           </div>
-
         </div>
       </div>
 
       {/* ── BARRA INFERIOR ── */}
       <div className="h-20 shrink-0 border-t border-gray-800 bg-[#121212] px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={toggleCamera} className={`p-4 rounded-2xl transition-all ${isCameraOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
-            {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          <button
+            onClick={toggleCamera}
+            className={`p-4 rounded-2xl transition-all ${isCameraOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}
+          >
+            {isCameraOn ? (
+              <Video className="w-5 h-5" />
+            ) : (
+              <VideoOff className="w-5 h-5" />
+            )}
           </button>
-          <button onClick={toggleMicrophone} className={`p-4 rounded-2xl transition-all ${isMicrophoneOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}>
-            {isMicrophoneOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          <button
+            onClick={toggleMicrophone}
+            className={`p-4 rounded-2xl transition-all ${isMicrophoneOn ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"}`}
+          >
+            {isMicrophoneOn ? (
+              <Mic className="w-5 h-5" />
+            ) : (
+              <MicOff className="w-5 h-5" />
+            )}
           </button>
         </div>
 
         <div className="flex items-center gap-4">
-          <button onClick={toggleScreenShare} className={`flex flex-col items-center gap-1.5 p-2 w-20 transition-colors ${isScreenSharing ? "text-sky-400" : "text-gray-400 hover:text-white"}`}>
+          <button
+            onClick={toggleScreenShare}
+            className={`flex flex-col items-center gap-1.5 p-2 w-20 transition-colors ${isScreenSharing ? "text-sky-400" : "text-gray-400 hover:text-white"}`}
+          >
             <MonitorUp className="w-5 h-5" />
-            <span className="text-[10px] font-medium">{isScreenSharing ? "Dejar de presentar" : "Presentar"}</span>
+            <span className="text-[10px] font-medium">
+              {isScreenSharing ? "Dejar de presentar" : "Presentar"}
+            </span>
           </button>
           <button className="flex flex-col items-center gap-1.5 p-2 text-sky-400 w-20 bg-[#0A2E46] rounded-xl border border-sky-900/50">
             <MessageSquare className="w-5 h-5" />
@@ -410,7 +479,10 @@ export default function Room() {
               </span>
             </div>
           </button>
-          <button onClick={() => setShowLeaveModal(true)} className="p-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 transition-all">
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="p-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 transition-all"
+          >
             <PhoneOff className="w-5 h-5" />
           </button>
         </div>
@@ -424,7 +496,9 @@ export default function Room() {
               <div className="p-3 bg-red-500/10 text-red-500 rounded-xl">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-white">¿Salir de la sala?</h3>
+              <h3 className="text-lg font-bold text-white">
+                ¿Salir de la sala?
+              </h3>
             </div>
             <p className="text-sm text-gray-400 mb-6">
               {isOwner
@@ -433,14 +507,26 @@ export default function Room() {
             </p>
             <div className="flex flex-col gap-3">
               {isOwner && (
-                <button onClick={handleEndRoomForAll} disabled={isProcessing} className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50">
+                <button
+                  onClick={handleEndRoomForAll}
+                  disabled={isProcessing}
+                  className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
+                >
                   {isProcessing ? "Finalizando..." : "Finalizar para todos"}
                 </button>
               )}
-              <button onClick={handleLeaveOnly} disabled={isProcessing} className={`w-full py-3 px-4 font-bold rounded-xl transition-colors ${isOwner ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-600 hover:bg-red-700 text-white"}`}>
+              <button
+                onClick={handleLeaveOnly}
+                disabled={isProcessing}
+                className={`w-full py-3 px-4 font-bold rounded-xl transition-colors ${isOwner ? "bg-[#2A2A2A] text-white hover:bg-gray-700" : "bg-red-600 hover:bg-red-700 text-white"}`}
+              >
                 Solo salir de la sala
               </button>
-              <button onClick={() => setShowLeaveModal(false)} disabled={isProcessing} className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                disabled={isProcessing}
+                className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2"
+              >
                 Cancelar
               </button>
             </div>
