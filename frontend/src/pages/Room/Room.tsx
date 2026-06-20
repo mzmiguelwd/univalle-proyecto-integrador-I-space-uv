@@ -126,16 +126,19 @@ export default function Room() {
         track.enabled = false;
         track.stop();
       });
-      setIsCameraOn(false);
-      emitMediaState(isMicrophoneOn, false);
 
       const streamToKeep = localStreamRef.current;
-      if (streamToKeep) {
-        setMyStream(streamToKeep.getAudioTracks().length > 0 ? streamToKeep : null);
-      }
+      const nextStream = streamToKeep
+        ? new MediaStream([...streamToKeep.getAudioTracks()])
+        : null;
+
+      localStreamRef.current = nextStream;
+      setIsCameraOn(false);
+      setMyStream(nextStream);
+      emitMediaState(isMicrophoneOn, false);
 
       if (localVideoRef.current) {
-        localVideoRef.current.srcObject = localStreamRef.current;
+        localVideoRef.current.srcObject = nextStream;
       }
     }
   };
@@ -179,7 +182,12 @@ export default function Room() {
         localStreamRef.current?.getAudioTracks().forEach((track) => {
           track.enabled = true;
         });
-        setMyStream(localStreamRef.current);
+
+        const nextStream = localStreamRef.current
+          ? new MediaStream([...localStreamRef.current.getTracks()])
+          : null;
+        localStreamRef.current = nextStream;
+        setMyStream(nextStream);
         setIsMicrophoneOn(true);
         emitMediaState(true, isCameraOn);
       }
@@ -187,7 +195,12 @@ export default function Room() {
       localStreamRef.current?.getAudioTracks().forEach((track) => {
         track.enabled = false;
       });
-      setMyStream(localStreamRef.current);
+
+      const nextStream = localStreamRef.current
+        ? new MediaStream([...localStreamRef.current.getTracks()])
+        : null;
+      localStreamRef.current = nextStream;
+      setMyStream(nextStream);
       setIsMicrophoneOn(false);
       emitMediaState(false, isCameraOn);
     }
