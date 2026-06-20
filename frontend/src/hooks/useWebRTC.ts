@@ -106,6 +106,57 @@ export const useWebRTC = (
     setParticipants([]);
   }, []);
 
+  const updatePeerTracks = useCallback(() => {
+    if (!peerRef.current) return;
+
+    const combined = getCombinedStream();
+    const newAudio = combined.getAudioTracks()[0] || null;
+    const newVideo = combined.getVideoTracks()[0] || null;
+
+    Object.values(callsRef.current).forEach((existingCall) => {
+      try {
+        const pc: any = (existingCall as any).peerConnection;
+        if (!pc || typeof pc.getSenders !== "function") {
+          console.warn("updatePeerTracks: peerConnection no disponible para call", existingCall.peer);
+          return;
+        }
+
+        const senders: RTCRtpSender[] = pc.getSenders();
+        const audioSender = senders.find((sender) => sender?.track?.kind === "audio");
+        const videoSender = senders.find((sender) => sender?.track?.kind === "video");
+
+        console.info("updatePeerTracks: reemplazando tracks para", existingCall.peer, {
+          hasAudio: !!newAudio,
+          hasVideo: !!newVideo,
+          audioSender: !!audioSender,
+          videoSender: !!videoSender,
+        });
+
+        if (newAudio) {
+          if (audioSender) {
+            audioSender.replaceTrack(newAudio);
+          } else {
+            pc.addTrack(newAudio, combined);
+          }
+        } else if (audioSender) {
+          audioSender.replaceTrack(null);
+        }
+
+        if (newVideo) {
+          if (videoSender) {
+            videoSender.replaceTrack(newVideo);
+          } else {
+            pc.addTrack(newVideo, combined);
+          }
+        } else if (videoSender) {
+          videoSender.replaceTrack(null);
+        }
+      } catch (err) {
+        console.warn("No se pudo actualizar tracks en la conexión existente:", err);
+      }
+    });
+  }, [getCombinedStream]);
+
   // ── Emitir estado de micrófono/cámara al resto de la sala ──
   // Llama esto desde Room.tsx cada vez que toggleMicrophone o toggleCamera cambie
   const emitMediaState = useCallback(
@@ -319,41 +370,8 @@ export const useWebRTC = (
   }, [roomId, currentUser.uid]);
 
   useEffect(() => {
-    if (!peerRef.current) return;
-
-    const combined = getCombinedStream();
-    const newAudio = combined.getAudioTracks()[0] || null;
-    const newVideo = combined.getVideoTracks()[0] || null;
-
-    Object.values(callsRef.current).forEach((existingCall) => {
-      try {
-        const pc: any = (existingCall as any).peerConnection;
-        if (!pc || typeof pc.getSenders !== "function") return;
-
-        const senders: RTCRtpSender[] = pc.getSenders();
-        const audioSender = senders.find((sender) => sender?.track?.kind === "audio");
-        const videoSender = senders.find((sender) => sender?.track?.kind === "video");
-
-        if (newAudio) {
-          if (audioSender) {
-            audioSender.replaceTrack(newAudio);
-          } else {
-            pc.addTrack(newAudio, currentLocalStreamRef.current!);
-          }
-        }
-
-        if (newVideo) {
-          if (videoSender) {
-            videoSender.replaceTrack(newVideo);
-          } else {
-            pc.addTrack(newVideo, currentLocalStreamRef.current!);
-          }
-        }
-      } catch (err) {
-        console.warn("No se pudo actualizar tracks en la conexión existente:", err);
-      }
-    });
-  }, [localStream, screenStream, getCombinedStream]);
+    updatePeerTracks();
+  }, [localStream, screenStream, getCombinedStream, updatePeerTracks]);
 
   return {
     remoteStreams,
