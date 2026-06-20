@@ -5,9 +5,11 @@ import { MonitorUp, Pin } from "lucide-react";
 const RemoteVideo = ({
   stream,
   className = "w-full h-full object-cover",
+  muted = false,
 }: {
   stream: MediaStream;
   className?: string;
+  muted?: boolean;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -16,7 +18,13 @@ const RemoteVideo = ({
   }, [stream]);
 
   return (
-    <video ref={videoRef} autoPlay playsInline className={className}>
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted={muted}
+      className={className}
+    >
       <track kind="captions" label="Captions" />
     </video>
   );
@@ -63,6 +71,7 @@ export default function MainStage({
       ) : displayedStream ? (
         <RemoteVideo
           stream={displayedStream}
+          muted={pinnedUserId === "local"}
           className={`w-full h-full object-contain bg-black ${pinnedUserId === "local" ? "transform scale-x-[-1]" : ""}`}
         />
       ) : (

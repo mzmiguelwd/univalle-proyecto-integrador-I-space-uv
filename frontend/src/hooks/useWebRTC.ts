@@ -64,16 +64,22 @@ export const useWebRTC = (
 
   const getCombinedStream = useCallback(() => {
     const combined = new MediaStream();
+
     if (currentLocalStreamRef.current) {
-      currentLocalStreamRef.current
-        .getTracks()
-        .forEach((t) => combined.addTrack(t));
+      currentLocalStreamRef.current.getTracks().forEach((track) => {
+        if (track.readyState !== "live") return;
+        if (!track.enabled) return;
+        combined.addTrack(track);
+      });
     }
+
     if (currentScreenStreamRef.current) {
-      currentScreenStreamRef.current
-        .getTracks()
-        .forEach((t) => combined.addTrack(t));
+      currentScreenStreamRef.current.getTracks().forEach((track) => {
+        if (track.readyState !== "live") return;
+        combined.addTrack(track);
+      });
     }
+
     return combined;
   }, []);
 
@@ -98,7 +104,9 @@ export const useWebRTC = (
   useEffect(() => {
     if (!roomId || !currentUser.uid) return;
 
-    const socket = io(SOCKET_SERVER_URL);
+    const socket = io(SOCKET_SERVER_URL, {
+      transports: ["websocket", "polling"],
+    });
     socketRef.current = socket;
 
     const peer = new Peer(PEERJS_CONFIG);
@@ -217,63 +225,41 @@ export const useWebRTC = (
   }, [roomId, currentUser.uid]);
 
   useEffect(() => {
-    if (!peerRef.current || participants.length === 0) return;
+    if (!peerRef.current) return;
 
-    // Build a combined stream of current local + screen tracks
     const combined = getCombinedStream();
+    const newAudio = combined.getAudioTracks()[0] || null;
+    const newVideo = combined.getVideoTracks()[0] || null;
 
-    participants.forEach((participant) => {
-      if (!participant.peerId) return;
+    Object.values(callsRef.current).forEach((existingCall) => {
+      try {
+        const pc: any = (existingCall as any).peerConnection;
+        if (!pc || typeof pc.getSenders !== "function") return;
 
-      const existingCall = callsRef.current[participant.peerId];
+        const senders: RTCRtpSender[] = pc.getSenders();
+        const audioSender = senders.find((sender) => sender?.track?.kind === "audio");
+        const videoSender = senders.find((sender) => sender?.track?.kind === "video");
 
-      if (existingCall) {
-        // Try to replace existing RTCRtpSender tracks (audio/video)
-        try {
-          // peerjs exposes underlying RTCPeerConnection at `peerConnection`
-          const pc: any = (existingCall as any).peerConnection;
-          if (pc && typeof pc.getSenders === "function") {
-            const senders: RTCRtpSender[] = pc.getSenders();
-
-            const newVideo = combined.getVideoTracks()[0] || null;
-            const newAudio = combined.getAudioTracks()[0] || null;
-
-            senders.forEach((sender) => {
-              if (!sender || !sender.track) return;
-              if (sender.track.kind === "video") {
-                sender.replaceTrack(newVideo);
-              }
-              if (sender.track.kind === "audio") {
-                sender.replaceTrack(newAudio);
-              }
-            });
+        if (newAudio) {
+          if (audioSender) {
+            audioSender.replaceTrack(newAudio);
+          } else {
+            pc.addTrack(newAudio, currentLocalStreamRef.current!);
           }
-        } catch (err) {
-          console.warn("No se pudo reemplazar tracks en call existente:", err);
         }
 
-        return; // avoid re-calling the peer
+        if (newVideo) {
+          if (videoSender) {
+            videoSender.replaceTrack(newVideo);
+          } else {
+            pc.addTrack(newVideo, currentLocalStreamRef.current!);
+          }
+        }
+      } catch (err) {
+        console.warn("No se pudo actualizar tracks en la conexión existente:", err);
       }
-
-      // If there's no existing call, create a new one
-      const newCall = peerRef.current!.call(participant.peerId, combined);
-
-      newCall.on("stream", (userVideoStream) => {
-        const peerId = participant.peerId!;
-        setRemoteStreams((prev) => {
-          const filtered = prev.filter((s) => s.id !== peerId);
-          return [...filtered, { id: peerId, stream: userVideoStream }];
-        });
-      });
-
-      newCall.on("error", (err) => {
-        console.warn(`Error en llamada con ${participant.peerId}:`, err);
-      });
-
-      callsRef.current[participant.peerId] = newCall;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participants, localStream, screenStream]);
+  }, [localStream, screenStream, getCombinedStream]);
 
   return {
     remoteStreams,
