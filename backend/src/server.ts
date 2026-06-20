@@ -17,8 +17,16 @@ const cleanClientUrl = rawClientUrl.endsWith("/")
   ? rawClientUrl.slice(0, -1)
   : rawClientUrl;
 
+const allowedOrigins = ["http://localhost:5173"];
+if (cleanClientUrl) allowedOrigins.push(cleanClientUrl);
+
 const corsOptions = {
-  origin: ["http://localhost:5173", cleanClientUrl],
+  origin: (origin: string | undefined, callback: any) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.warn(`CORS request blocked from origin: ${origin}`);
+    callback(new Error("CORS not allowed"), false);
+  },
   methods: ["GET", "POST"],
   credentials: true,
 };
@@ -31,6 +39,7 @@ setupSwagger(app, PORT);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions,
+  transports: ["websocket", "polling"],
 });
 
 const peerServer = ExpressPeerServer(server, {

@@ -217,7 +217,7 @@ export default function ParticipantsGrid({
       {/* ── Room Stats ── */}
       <div className="flex items-center justify-between text-xs text-gray-400 mb-2 px-1">
         <p>
-          {total} participante{total !== 1 ? "s" : ""}
+          {total} Participante{total !== 1 ? "s" : ""}
         </p>
 
         {pinnedUserId && (

@@ -78,8 +78,13 @@ export default function Room() {
   const handleRoomEnded = () => navigate("/dashboard");
 
   // CORE: WEBRTC
-  const { remoteStreams, participants, socketRef, cleanupPeerConnections } =
-    useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
+  const {
+    remoteStreams,
+    participants,
+    socketRef,
+    cleanupPeerConnections,
+    emitMediaState,
+  } = useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
 
   // MEDIA CONTROL HANDLERS
   const toggleCamera = async () => {
@@ -87,17 +92,29 @@ export default function Room() {
       try {
         setPermissionError(null);
 
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const videoStream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: isMicrophoneOn,
         });
 
-        localStreamRef.current = stream;
-        setMyStream(stream);
+        const hasAudio = localStreamRef.current?.getAudioTracks().length ?? 0;
+        let newStream: MediaStream;
 
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        if (hasAudio > 0 && localStreamRef.current) {
+          newStream = new MediaStream([
+            ...localStreamRef.current.getAudioTracks(),
+            ...videoStream.getVideoTracks(),
+          ]);
+        } else {
+          newStream = videoStream;
+        }
+
+        localStreamRef.current = newStream;
+        setMyStream(newStream);
+
+        if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
 
         setIsCameraOn(true);
+        emitMediaState(isMicrophoneOn, true);
       } catch (error) {
         console.error("Error al acceder a la cámara:", error);
         setPermissionError(
@@ -105,29 +122,53 @@ export default function Room() {
         );
       }
     } else {
-      myStream?.getVideoTracks().forEach((track) => track.stop());
+      localStreamRef.current?.getVideoTracks().forEach((track) => {
+        track.enabled = false;
+        track.stop();
+      });
       setIsCameraOn(false);
+      emitMediaState(isMicrophoneOn, false);
 
-      if (!isMicrophoneOn) {
-        setMyStream(null);
-        if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      const streamToKeep = localStreamRef.current;
+      if (streamToKeep) {
+        setMyStream(streamToKeep.getAudioTracks().length > 0 ? streamToKeep : null);
+      }
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
       }
     }
   };
 
   const toggleMicrophone = async () => {
     if (!isMicrophoneOn) {
-      if (!localStreamRef.current) {
+      const hasAudio = localStreamRef.current?.getAudioTracks().length ?? 0;
+      const hasVideo = localStreamRef.current?.getVideoTracks().length ?? 0;
+
+      if (hasAudio === 0) {
         try {
           setPermissionError(null);
-          const stream = await navigator.mediaDevices.getUserMedia({
+          const audioStream = await navigator.mediaDevices.getUserMedia({
             video: false,
             audio: true,
           });
 
-          localStreamRef.current = stream;
-          setMyStream(stream);
+          let newStream: MediaStream;
+          if (hasVideo > 0 && localStreamRef.current) {
+            newStream = new MediaStream([
+              ...localStreamRef.current.getVideoTracks(),
+              ...audioStream.getAudioTracks(),
+            ]);
+          } else {
+            newStream = audioStream;
+          }
+
+          localStreamRef.current = newStream;
+          setMyStream(newStream);
+          if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
+
           setIsMicrophoneOn(true);
+          emitMediaState(true, isCameraOn);
         } catch (error) {
           console.error("Error al acceder al micrófono:", error);
           setPermissionError(
@@ -135,18 +176,20 @@ export default function Room() {
           );
         }
       } else {
-        localStreamRef.current
-          .getAudioTracks()
-          .forEach((track) => (track.enabled = true));
+        localStreamRef.current?.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+        });
+        setMyStream(localStreamRef.current);
         setIsMicrophoneOn(true);
+        emitMediaState(true, isCameraOn);
       }
     } else {
-      if (localStreamRef.current) {
-        localStreamRef.current
-          .getAudioTracks()
-          .forEach((track) => (track.enabled = false));
-      }
+      localStreamRef.current?.getAudioTracks().forEach((track) => {
+        track.enabled = false;
+      });
+      setMyStream(localStreamRef.current);
       setIsMicrophoneOn(false);
+      emitMediaState(false, isCameraOn);
     }
   };
 
