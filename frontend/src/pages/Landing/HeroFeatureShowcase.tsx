@@ -11,15 +11,11 @@ const featureListItems = [
   { icon: icon2, text: "Hilos de discusión organizados" },
 ];
 
-const colorBars = [
-  "bg-[#8ecdfd33]",
-  "bg-[#d2c5af33]",
-  "bg-[#fabb6833]",
-];
+const colorBars = ["bg-[#8ecdfd33]", "bg-[#d2c5af33]", "bg-[#fabb6833]"];
 
-export function HeroFeatureShowcaseSection() {
+export function HeroFeatureShowcase() {
   return (
-    <section className="flex flex-col items-start pt-20 pb-0 px-0 relative self-stretch w-full flex-[0_0_auto]">
+    <section className="flex flex-col items-start pb-0 px-0 relative self-stretch w-full flex-[0_0_auto]">
       <div className="flex flex-col items-start px-16 py-32 relative self-stretch w-full flex-[0_0_auto] bg-[#131313] max-md:px-6 max-md:py-20">
         <div className="flex max-w-screen-xl items-center justify-center gap-12 relative w-full flex-[0_0_auto] mx-auto max-lg:flex-col max-lg:items-start">
           <div className="flex flex-col items-start gap-6 relative flex-1 grow w-full">
@@ -33,19 +29,21 @@ export function HeroFeatureShowcaseSection() {
 
             <div className="flex flex-col max-w-xl items-start relative w-full flex-[0_0_auto]">
               <p className="relative self-stretch mt-[-1px] font-['Inter'] font-normal text-[#c0c7cf] text-lg tracking-[0] leading-7">
-                Conéctate con estudiantes de todo el mundo en salas de estudio
+                Conéctate con estudiantes de todo el mundo en salas
                 <br />
-                síncronas. Encuentra el foco que necesitas con un espacio
+                de estudio síncronas.
+                <br />
+                Encuentra el foco que necesitas con un espacio
                 <br />
                 diseñado para la productividad y la calma.
               </p>
             </div>
 
             <div className="flex items-start gap-4 pt-4">
-                <Link
-                    to="/register"
-                    aria-label="Crear cuenta"
-                    className="
+              <Link
+                to="/register"
+                aria-label="Crear cuenta"
+                className="
                         inline-flex
                         items-center
                         justify-center
@@ -63,13 +61,13 @@ export function HeroFeatureShowcaseSection() {
                         min-w-[340px]
                         h-[74px]
                     "
-                    >
-                    <UserPlus className="w-5 h-5 text-[#00344e]" />
+              >
+                <UserPlus className="w-5 h-5 text-[#00344e]" />
 
-                    <span className="font-['Inter'] font-medium text-[#00344e] text-lg tracking-wide">
-                        Quiero registrarme
-                    </span>
-                </Link>
+                <span className="font-['Inter'] font-medium text-[#00344e] text-lg tracking-wide">
+                  Quiero registrarme
+                </span>
+              </Link>
             </div>
           </div>
 
@@ -98,7 +96,7 @@ export function HeroFeatureShowcaseSection() {
         </div>
       </div>
 
-      <div className="flex flex-col items-start px-16 py-24 relative self-stretch w-full flex-[0_0_auto] bg-[#1c1b1b] max-md:px-6 max-md:py-16">
+      <div className="flex flex-col items-start px-16 py-16 relative self-stretch w-full flex-[0_0_auto] bg-[#1c1b1b] max-md:px-6 max-md:py-16">
         <div className="flex flex-col max-w-screen-xl items-start gap-16 relative w-full flex-[0_0_auto] mx-auto">
           <div className="flex flex-col items-start gap-4 relative self-stretch w-full flex-[0_0_auto]">
             <div className="items-center flex flex-col relative self-stretch w-full flex-[0_0_auto]">
@@ -245,7 +243,6 @@ export function HeroFeatureShowcaseSection() {
       {/* CTA FINAL */}
       <div className="flex flex-col items-start px-48 py-32 relative self-stretch w-full flex-[0_0_auto] bg-[#131313] max-lg:px-16 max-md:px-6 max-md:py-20">
         <div className="flex flex-col max-w-4xl items-center gap-6 p-24 relative w-full flex-[0_0_auto] bg-[#5797c433] rounded-3xl overflow-hidden border border-solid border-[#8ecdfd33] mx-auto max-md:p-10">
-
           {/* Glow decorativo */}
           <div
             className="absolute top-[-159px] right-[-159px] w-80 h-80 bg-[#8ecdfd1a] rounded-xl blur-[32px]"
@@ -279,9 +276,9 @@ export function HeroFeatureShowcaseSection() {
           {/* Botón */}
           <div className="flex flex-col items-center pt-6 pb-0 px-0 relative self-stretch w-full flex-[0_0_auto]">
             <Link
-                to="/register"
-                aria-label="Comienza a conectarte gratis"
-                className="
+              to="/register"
+              aria-label="Comienza a conectarte gratis"
+              className="
                     inline-flex
                     items-center
                     justify-center
@@ -296,10 +293,10 @@ export function HeroFeatureShowcaseSection() {
                     duration-300
                     cursor-pointer
                 "
-                >
-                <span className="font-['Sora'] font-semibold text-[#00344e] text-2xl text-center">
-                    Comienza a conectarte gratis
-                </span>
+            >
+              <span className="font-['Sora'] font-semibold text-[#00344e] text-2xl text-center">
+                Comienza a conectarte gratis
+              </span>
             </Link>
           </div>
         </div>

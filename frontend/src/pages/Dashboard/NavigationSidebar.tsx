@@ -1,16 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import {
-  BookOpen,
-  Clock,
-  Users,
-  UserRound,
-  Plus,
-} from "lucide-react";
+import { BookOpen, UserRound, Plus } from "lucide-react";
 
 import { type UserProfile } from "../../config/auth";
 
 type Props = {
-  activePage: "Inicio" | "Mis sesiones" | "Comunidad" | "Mi perfil";
+  activePage: "Inicio" | "Mi perfil";
   profile: UserProfile | null;
 };
 
@@ -21,26 +15,13 @@ const navItems = [
     route: "/dashboard",
   },
   {
-    label: "Mis sesiones",
-    icon: Clock,
-    route: "/sessions",
-  },
-  {
-    label: "Comunidad",
-    icon: Users,
-    route: "/community",
-  },
-  {
     label: "Mi perfil",
     icon: UserRound,
     route: "/profile",
   },
 ];
 
-export default function NavigationSidebar({
-  activePage,
-  profile,
-}: Props) {
+export default function NavigationSidebar({ activePage, profile }: Props) {
   const navigate = useNavigate();
 
   const displayName = profile?.name || "Usuario";
@@ -57,7 +38,7 @@ export default function NavigationSidebar({
       className="
         hidden
         lg:flex
-        w-72
+        w-64
         flex-col
         justify-between
         border-r
@@ -69,13 +50,8 @@ export default function NavigationSidebar({
     >
       <div>
         <div>
-          <h2 className="text-lg font-bold text-sky-200">
-            EstudioSíncrono
-          </h2>
-
-          <p className="text-xs text-zinc-500">
-            Deep Work Mode
-          </p>
+          <h2 className="text-lg font-bold text-sky-200">Space UV</h2>
+          <p className="text-xs text-zinc-500">Deep Work Mode</p>
         </div>
 
         <nav className="mt-12 space-y-3">
@@ -122,7 +98,7 @@ export default function NavigationSidebar({
           "
         >
           <Plus className="h-4 w-4" />
-          Iniciar nueva sesión
+          Iniciar nueva reunión
         </button>
 
         <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
@@ -144,9 +120,7 @@ export default function NavigationSidebar({
           </div>
 
           <div>
-            <p className="text-sm font-medium">
-              {displayName}
-            </p>
+            <p className="text-sm font-medium">{displayName}</p>
 
             <p className="text-[10px] uppercase tracking-wider text-zinc-500">
               {profile?.role || "Student"}

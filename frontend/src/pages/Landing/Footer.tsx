@@ -15,7 +15,7 @@ const footerSections = [
   },
 ];
 
-export const LandingFooterSection = () => {
+export const Footer = () => {
   return (
     <footer className="flex flex-col items-start gap-16 p-16 relative self-stretch w-full bg-[#201f1f] border-t border-[#40484e4c] max-md:px-6 max-md:py-12">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 max-w-screen-xl w-full mx-auto">
@@ -68,7 +68,7 @@ export const LandingFooterSection = () => {
       {/* Bottom */}
       <div className="flex max-w-screen-xl items-center justify-between pt-8 border-t border-[#40484e33] w-full mx-auto max-md:flex-col max-md:gap-6">
         <p className="text-[#c0c7cf99] text-base leading-6 text-center">
-          © 2026 EstudioSíncrono. Todos los derechos reservados.
+          © 2026 Space UV. Todos los derechos reservados.
         </p>
 
         {/* Socials */}
@@ -102,4 +102,4 @@ export const LandingFooterSection = () => {
   );
 };
 
-export default LandingFooterSection;
+export default Footer;
