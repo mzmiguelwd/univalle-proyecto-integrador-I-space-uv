@@ -62,6 +62,7 @@ io.on("connection", (socket: Socket) => {
   console.log(`Usuario conectado (Socket.IO): ${socket.id}`);
 
   socket.on("join-room", async ({ roomId, user }) => {
+    console.log("join-room payload:", { socketId: socket.id, roomId, user });
     socket.join(roomId);
     console.log(
       `Socket ${socket.id} se unió a la sala ${roomId} con PeerID: ${user.peerId}`,
@@ -71,6 +72,7 @@ io.on("connection", (socket: Socket) => {
     socket.data.peerId = user.peerId;
     socket.data.name = user.name;
     socket.data.avatar = user.avatar;
+    console.log(`socket.data para ${socket.id}:`, socket.data);
 
     socket.to(roomId).emit("user-connected", {
       socketId: socket.id,
@@ -80,6 +82,7 @@ io.on("connection", (socket: Socket) => {
     });
 
     const sockets = await io.in(roomId).fetchSockets();
+    console.log(`Sockets en la sala ${roomId}:`, sockets.map((s) => ({ id: s.id, data: s.data })));
     const existingUsers = sockets
       .filter((s) => s.id !== socket.id)
       .map((s) => ({
@@ -89,6 +92,7 @@ io.on("connection", (socket: Socket) => {
         peerId: s.data.peerId,
       }));
 
+    console.log(`Enviando room-users a ${socket.id}:`, existingUsers);
     socket.emit("room-users", existingUsers);
   });
 
@@ -97,6 +101,7 @@ io.on("connection", (socket: Socket) => {
     console.log(`Solicitud de presencia recibida desde ${socket.id} para sala ${roomId}`);
     try {
       const sockets = await io.in(roomId).fetchSockets();
+      console.log(`Sockets actualmente en ${roomId}:`, sockets.map((s)=>({id: s.id, data: s.data}))); 
       const existingUsers = sockets
         .filter((s) => s.id !== socket.id)
         .map((s) => ({
@@ -130,6 +135,7 @@ io.on("connection", (socket: Socket) => {
   socket.on("disconnecting", () => {
     const roomId = socket.data.roomId;
     const peerId = socket.data.peerId;
+    console.log(`disconnecting: socket=${socket.id} room=${roomId} peerId=${peerId} socket.data=`, socket.data);
     if (roomId) {
       socket.to(roomId).emit("user-disconnected", socket.id, peerId);
     }

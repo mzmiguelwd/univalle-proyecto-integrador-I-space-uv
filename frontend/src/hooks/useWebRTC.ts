@@ -109,12 +109,25 @@ export const useWebRTC = (
     });
     socketRef.current = socket;
 
+    socket.on("connect", () => {
+      console.info(`Socket.IO connected (client) id=${socket.id}`);
+    });
+
+    socket.on("connect_error", (err: any) => {
+      console.error("Socket.IO connect_error:", err);
+    });
+
+    socket.on("connect_timeout", (err: any) => {
+      console.warn("Socket.IO connect_timeout:", err);
+    });
+
     const peer = new Peer(PEERJS_CONFIG);
     peerRef.current = peer;
 
     peer.on("open", (myPeerId) => {
       console.info("PeerJS connected with ID:", myPeerId);
 
+      console.info(`Emitiendo join-room con peerId=${myPeerId}`);
       socket.emit("join-room", {
         roomId,
         user: {
@@ -137,14 +150,29 @@ export const useWebRTC = (
 
       const combinedStream = getCombinedStream();
       console.info(`Iniciando llamada a peer ${targetPeerId}`);
+      console.debug("Combined stream tracks:", combinedStream.getTracks().map(t=>({kind: t.kind, enabled: t.enabled, id: t.id})));
       const call = peer.call(targetPeerId, combinedStream);
       callsRef.current[targetPeerId] = call;
 
       call.on("stream", (userVideoStream) => {
+        console.info(`call.stream from ${call.peer}: tracks=`, userVideoStream.getTracks().map(t=>({kind:t.kind, enabled:t.enabled, id:t.id})));
         setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === call.peer)) return prev;
-          return [...prev, { id: call.peer, stream: userVideoStream }];
+          if (prev.some((s) => s.id === call.peer)) {
+            console.debug(`Stream de ${call.peer} ya existe, ignorando`);
+            return prev;
+          }
+          const next = [...prev, { id: call.peer, stream: userVideoStream }];
+          console.debug("RemoteStreams ahora:", next.map(n=>n.id));
+          return next;
         });
+      });
+
+      call.on("close", () => {
+        console.info(`call to ${targetPeerId} closed`);
+      });
+
+      call.on("error", (err:any) => {
+        console.error(`call error with ${targetPeerId}:`, err);
       });
     };
 
@@ -160,19 +188,36 @@ export const useWebRTC = (
       }
 
       call.on("stream", (userVideoStream) => {
-        console.info(`Recibido stream remoto de ${call.peer}`);
+        console.info(`Recibido stream remoto de ${call.peer} id=${userVideoStream.id} tracks=`, userVideoStream.getTracks().map(t=>({kind:t.kind, enabled:t.enabled, id:t.id})));
         setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === call.peer)) return prev;
-          return [...prev, { id: call.peer, stream: userVideoStream }];
+          if (prev.some((s) => s.id === call.peer)) {
+            console.debug(`Stream remoto de ${call.peer} ya existe, ignorando`);
+            return prev;
+          }
+          const next = [...prev, { id: call.peer, stream: userVideoStream }];
+          console.debug("RemoteStreams ahora:", next.map(n=>n.id));
+          return next;
         });
       });
 
       callsRef.current[call.peer] = call;
     });
 
+    peer.on("error", (err:any) => {
+      console.error("PeerJS error:", err);
+    });
+
+    peer.on("disconnected", () => {
+      console.warn("PeerJS disconnected");
+    });
+
+    peer.on("close", () => {
+      console.warn("PeerJS closed");
+    });
+
     // ── room-users: lista inicial al unirse ─────────────────
     socket.on("room-users", (users: any[]) => {
-      console.info(`room-users recibido con ${users.length} entradas`);
+      console.info(`room-users recibido con ${users.length} entradas`, users);
       const participantsList: Participant[] = users.map((u) => ({
         id: u.socketId,
         name: u.name || u.user?.name || "Usuario",
