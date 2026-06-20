@@ -117,81 +117,41 @@ export const useWebRTC = (
     setParticipants([]);
   }, []);
 
-  const updatePeerTracks = useCallback(async () => {
+  const updatePeerTracks = useCallback(() => {
     if (!peerRef.current) {
       console.warn("updatePeerTracks: peerRef no inicializado");
       return;
     }
 
-    const combined = getCombinedStream();
-    const newAudio = combined.getAudioTracks()[0] || null;
-    const newVideo = combined.getVideoTracks()[0] || null;
+    const combinedStream = getCombinedStream();
+    console.info("updatePeerTracks: Reiniciando llamadas con el nuevo stream");
 
-    console.info("updatePeerTracks: iniciando actualización con", {
-      numCalls: Object.keys(callsRef.current).length,
-      hasAudio: !!newAudio,
-      hasVideo: !!newVideo,
-      audioId: newAudio?.id,
-      videoId: newVideo?.id,
-    });
-
-    const updatePromises = Object.values(callsRef.current).map(async (existingCall) => {
-      try {
-        const pc: any = (existingCall as any).peerConnection;
-        if (!pc || typeof pc.getSenders !== "function") {
-          console.warn("updatePeerTracks: peerConnection no disponible para call", existingCall.peer);
-          return;
-        }
-
-        const senders: RTCRtpSender[] = pc.getSenders();
-        const audioSender = senders.find((sender) => sender?.track?.kind === "audio");
-        const videoSender = senders.find((sender) => sender?.track?.kind === "video");
-
-        console.info("updatePeerTracks: senders actuales para", existingCall.peer, {
-          audioSender: audioSender ? { kind: audioSender.track?.kind, id: audioSender.track?.id } : null,
-          videoSender: videoSender ? { kind: videoSender.track?.kind, id: videoSender.track?.id } : null,
-        });
-
-        // Actualizar audio
-        if (newAudio) {
-          if (audioSender) {
-            console.info(`Reemplazando audio track en ${existingCall.peer}:`, {
-              oldId: audioSender.track?.id,
-              newId: newAudio.id,
-            });
-            await audioSender.replaceTrack(newAudio);
-          } else {
-            console.info(`Agregando audio track a ${existingCall.peer}:`, { id: newAudio.id });
-            pc.addTrack(newAudio, combined);
-          }
-        } else if (audioSender) {
-          console.info(`Removiendo audio track en ${existingCall.peer}`);
-          await audioSender.replaceTrack(null);
-        }
-
-        // Actualizar video
-        if (newVideo) {
-          if (videoSender) {
-            console.info(`Reemplazando video track en ${existingCall.peer}:`, {
-              oldId: videoSender.track?.id,
-              newId: newVideo.id,
-            });
-            await videoSender.replaceTrack(newVideo);
-          } else {
-            console.info(`Agregando video track a ${existingCall.peer}:`, { id: newVideo.id });
-            pc.addTrack(newVideo, combined);
-          }
-        } else if (videoSender) {
-          console.info(`Removiendo video track en ${existingCall.peer}`);
-          await videoSender.replaceTrack(null);
-        }
-      } catch (err) {
-        console.error(`Error actualizando tracks en la conexión`, existingCall.peer, ":", err);
+    // Recorremos todos los peers conectados actualmente
+    Object.keys(callsRef.current).forEach((targetPeerId) => {
+      // 1. Cerramos la conexión antigua
+      if (callsRef.current[targetPeerId]) {
+        callsRef.current[targetPeerId].close();
       }
+
+      // 2. Iniciamos una llamada nueva e inyectamos el stream actualizado
+      const newCall = peerRef.current!.call(targetPeerId, combinedStream);
+
+      newCall.on("stream", (userVideoStream) => {
+        setRemoteStreams((prev) => {
+          const filtered = prev.filter((s) => s.id !== targetPeerId);
+          return [...filtered, { id: targetPeerId, stream: userVideoStream }];
+        });
+      });
+
+      newCall.on("error", (err: any) => {
+        console.error(`Error en la renegociación de llamada con ${targetPeerId}:`, err);
+      });
+
+      // 3. Sobrescribimos la referencia con la nueva llamada
+      callsRef.current[targetPeerId] = newCall;
     });
 
-    await Promise.all(updatePromises);
-    // Forzar re-render de componentes que usan remoteStreams para que se recalcule hasActiveVideo
+    // Forzamos el renderizado de la UI
     setRemoteTracksUpdate((prev) => prev + 1);
     console.info("updatePeerTracks: actualización completada");
   }, [getCombinedStream]);
@@ -309,18 +269,11 @@ export const useWebRTC = (
       }
 
       call.on("stream", (userVideoStream) => {
-        console.info(`peer.on("call"): stream recibido de ${call.peer}`, {
-          streamId: userVideoStream.id,
-          tracks: userVideoStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })),
-        });
+        console.info(`peer.on("call"): stream actualizado recibido de ${call.peer}`);
         setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === call.peer)) {
-            console.debug(`Stream de ${call.peer} ya existe, ignorando`);
-            return prev;
-          }
-          const next = [...prev, { id: call.peer, stream: userVideoStream }];
-          console.debug("setRemoteStreams: actualizado con", next.map(s => s.id));
-          return next;
+          // Ya no ignoramos el stream si existe, lo filtramos y lo reemplazamos
+          const filtered = prev.filter((s) => s.id !== call.peer);
+          return [...filtered, { id: call.peer, stream: userVideoStream }];
         });
       });
 
