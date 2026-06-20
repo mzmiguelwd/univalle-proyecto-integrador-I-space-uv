@@ -126,8 +126,28 @@ export const useWebRTC = (
       });
     });
 
+    const callPeer = (targetPeerId: string) => {
+      if (!targetPeerId || callsRef.current[targetPeerId]) return;
+
+      const combinedStream = getCombinedStream();
+      const call = peer.call(targetPeerId, combinedStream);
+      callsRef.current[targetPeerId] = call;
+
+      call.on("stream", (userVideoStream) => {
+        setRemoteStreams((prev) => {
+          if (prev.some((s) => s.id === call.peer)) return prev;
+          return [...prev, { id: call.peer, stream: userVideoStream }];
+        });
+      });
+    };
+
     peer.on("call", (call) => {
-      call.answer(getCombinedStream());
+      const answerStream = getCombinedStream();
+      if (answerStream.getTracks().length > 0) {
+        call.answer(answerStream);
+      } else {
+        call.answer();
+      }
 
       call.on("stream", (userVideoStream) => {
         setRemoteStreams((prev) => {
@@ -149,34 +169,29 @@ export const useWebRTC = (
         micOn: u.micOn ?? false, // respetar estado real si el servidor lo envía, sino false
         camOn: u.camOn ?? false,
       }));
+
       setParticipants(participantsList);
     });
 
     // ── user-connected: nuevo participante entra ─────────────
     socket.on("user-connected", ({ socketId, name, avatar, peerId }) => {
-      setParticipants((prev) => [
-        ...prev,
-        {
-          id: socketId,
-          name: name || "Usuario",
-          avatar,
-          peerId,
-          micOn: false, // apagado por defecto hasta que el participante active
-          camOn: false,
-        },
-      ]);
+      setParticipants((prev) => {
+        if (prev.some((p) => p.id === socketId)) return prev;
+        return [
+          ...prev,
+          {
+            id: socketId,
+            name: name || "Usuario",
+            avatar,
+            peerId,
+            micOn: false, // apagado por defecto hasta que el participante active
+            camOn: false,
+          },
+        ];
+      });
 
-      if (peerId) {
-        const call = peer.call(peerId, getCombinedStream());
-
-        call.on("stream", (userVideoStream) => {
-          setRemoteStreams((prev) => {
-            if (prev.some((s) => s.id === peerId)) return prev;
-            return [...prev, { id: peerId, stream: userVideoStream }];
-          });
-        });
-
-        callsRef.current[peerId] = call;
+      if (peerId && peerId !== peer.id) {
+        callPeer(peerId);
       }
     });
 
