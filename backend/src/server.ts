@@ -92,6 +92,27 @@ io.on("connection", (socket: Socket) => {
     socket.emit("room-users", existingUsers);
   });
 
+  // Permite al cliente solicitar explícitamente la lista de participantes
+  socket.on("request-presence", async ({ roomId }) => {
+    console.log(`Solicitud de presencia recibida desde ${socket.id} para sala ${roomId}`);
+    try {
+      const sockets = await io.in(roomId).fetchSockets();
+      const existingUsers = sockets
+        .filter((s) => s.id !== socket.id)
+        .map((s) => ({
+          socketId: s.id,
+          name: s.data.name || "Usuario",
+          avatar: s.data.avatar || null,
+          peerId: s.data.peerId,
+        }));
+
+      console.log(`Enviando ${existingUsers.length} participantes a ${socket.id} para la sala ${roomId}`);
+      socket.emit("room-users", existingUsers);
+    } catch (err) {
+      console.error("Error fetching presence for room:", err);
+    }
+  });
+
   socket.on("media-state", ({ roomId, micOn, camOn }) => {
     // Re-emitir a todos en la sala excepto al emisor
     socket.to(roomId).emit("media-state", {
