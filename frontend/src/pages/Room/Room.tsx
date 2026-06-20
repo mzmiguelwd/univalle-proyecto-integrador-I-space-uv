@@ -174,12 +174,18 @@ export default function Room() {
           if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
         }, 100);
 
-        stream.getVideoTracks()[0].onended = () => {
+        const screenTrack = stream.getVideoTracks()[0];
+
+        screenTrack.addEventListener("ended", () => {
           setIsScreenSharing(false);
           setScreenStream(null);
+
           socketRef.current?.emit("screen-share-stopped", { roomId });
-          if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-        };
+
+          if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = null;
+          }
+        });
       } catch (error) {
         console.error("Error al compartir pantalla:", error);
       }
