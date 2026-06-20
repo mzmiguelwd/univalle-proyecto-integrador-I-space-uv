@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createStudyRoom } from "../config/rooms";
-import { auth } from "../config/firebase";
 import { Loader2, AlertCircle } from "lucide-react";
+
+import { auth } from "../../../config/firebase.ts";
+import { createStudyRoom } from "../../../config/rooms.ts";
 
 export default function CreateRoom() {
   const navigate = useNavigate();

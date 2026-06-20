@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { updateStudyRoom, endStudyRoom, type StudyRoom } from "../../config/rooms";
+import {
+  updateStudyRoom,
+  endStudyRoom,
+  type StudyRoom,
+} from "../../../config/rooms";
 import { X, Loader2, Trash2 } from "lucide-react";
 
 interface Props {
@@ -9,23 +13,28 @@ interface Props {
   onDeleted?: () => void; // callback opcional para cuando se elimina
 }
 
-export default function EditRoomModal({ room, isOpen, onClose, onDeleted }: Props) {
+export default function EditRoomModal({
+  room,
+  isOpen,
+  onClose,
+  onDeleted,
+}: Props) {
   const [formData, setFormData] = useState({
     title: "",
     topic: "",
     limit: "",
     privacy: "",
   });
-  const [isLoading, setIsLoading]         = useState(false);
-  const [isDeleting, setIsDeleting]       = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false); // muestra confirmación
 
   useEffect(() => {
     if (room) {
       setFormData({
-        title:   room.title   || "",
-        topic:   room.topic   || "",
-        limit:   (room.limit ?? 1).toString(),
+        title: room.title || "",
+        topic: room.topic || "",
+        limit: (room.limit ?? 1).toString(),
         privacy: room.privacy || "Pública",
       });
     }
@@ -40,9 +49,9 @@ export default function EditRoomModal({ room, isOpen, onClose, onDeleted }: Prop
     setIsLoading(true);
     try {
       await updateStudyRoom(room.id, {
-        title:   formData.title,
-        topic:   formData.topic,
-        limit:   parseInt(formData.limit) || 1,
+        title: formData.title,
+        topic: formData.topic,
+        limit: parseInt(formData.limit) || 1,
         privacy: formData.privacy,
       });
       onClose();
@@ -72,13 +81,15 @@ export default function EditRoomModal({ room, isOpen, onClose, onDeleted }: Prop
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="bg-[#1C1C1C] border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-sky-300">Editar Sala</h2>
           <button
             type="button"
-            onClick={() => { setConfirmDelete(false); onClose(); }}
+            onClick={() => {
+              setConfirmDelete(false);
+              onClose();
+            }}
             className="text-gray-400 hover:text-white transition-colors"
           >
             <X size={20} />
@@ -93,7 +104,9 @@ export default function EditRoomModal({ room, isOpen, onClose, onDeleted }: Prop
             </label>
             <input
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
               className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-white
                          focus:outline-none focus:border-sky-400 transition-colors"
             />
@@ -105,7 +118,9 @@ export default function EditRoomModal({ room, isOpen, onClose, onDeleted }: Prop
             </label>
             <textarea
               value={formData.topic}
-              onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, topic: e.target.value })
+              }
               className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-white
                          focus:outline-none focus:border-sky-400 transition-colors resize-none"
               rows={3}
@@ -185,7 +200,6 @@ export default function EditRoomModal({ room, isOpen, onClose, onDeleted }: Prop
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

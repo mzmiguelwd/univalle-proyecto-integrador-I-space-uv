@@ -61,9 +61,14 @@ export default function Login() {
       >
         <div className="absolute inset-0 bg-gradient-to-br from-[#0d0f14]/75 via-[#0d0f14]/45 to-transparent" />
         <div className="relative z-10 flex flex-col justify-between p-10 w-full">
-          <h1 className="text-3xl font-bold text-[#5ab4e8] tracking-tight font-serif">
-            EstudioSíncrono
-          </h1>
+          <Link
+            to="/"
+            className="text-[#5ab4e8] hover:text-[#7cc4ef] font-semibold transition-colors"
+          >
+            <h1 className="text-3xl font-bold text-[#5ab4e8] tracking-tight font-serif">
+              Space UV
+            </h1>
+          </Link>
           <blockquote className="text-white/75 text-lg italic font-light leading-relaxed max-w-sm">
             "La concentración es la raíz de todas las facultades del hombre."
           </blockquote>
@@ -88,7 +93,7 @@ export default function Login() {
             <div className="absolute inset-0 bg-[#0d0f14]/60" />
             <div className="relative z-10 flex items-center justify-center h-full">
               <h1 className="text-2xl sm:text-3xl font-bold text-[#5ab4e8] font-serif tracking-tight">
-                EstudioSíncrono
+                Space UV
               </h1>
             </div>
           </div>
@@ -276,28 +281,6 @@ export default function Login() {
               </Link>
             </p>
           </form>
-
-          {/* Footer — oculto en móvil para no saturar */}
-          <div className="hidden sm:flex mt-10 justify-center gap-5 text-xs text-white/20">
-            <button
-              type="button"
-              className="hover:text-white/40 transition-colors"
-            >
-              Privacy Policy
-            </button>
-            <button
-              type="button"
-              className="hover:text-white/40 transition-colors"
-            >
-              Terms of Service
-            </button>
-            <button
-              type="button"
-              className="hover:text-white/40 transition-colors"
-            >
-              Accessibility Support
-            </button>
-          </div>
         </div>
       </div>
     </div>

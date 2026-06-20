@@ -34,6 +34,8 @@ export type Participant = {
   name: string;
   avatar?: string | null;
   peerId?: string;
+  micOn: boolean; // ← nuevo
+  camOn: boolean; // ← nuevo (útil para indicador visual futuro)
 };
 
 export const useWebRTC = (
@@ -84,6 +86,15 @@ export const useWebRTC = (
     setParticipants([]);
   }, []);
 
+  // ── Emitir estado de micrófono/cámara al resto de la sala ──
+  // Llama esto desde Room.tsx cada vez que toggleMicrophone o toggleCamera cambie
+  const emitMediaState = useCallback(
+    (micOn: boolean, camOn: boolean) => {
+      socketRef.current?.emit("media-state", { roomId, micOn, camOn });
+    },
+    [roomId],
+  );
+
   useEffect(() => {
     if (!roomId || !currentUser.uid) return;
 
@@ -120,20 +131,31 @@ export const useWebRTC = (
       callsRef.current[call.peer] = call;
     });
 
+    // ── room-users: lista inicial al unirse ─────────────────
     socket.on("room-users", (users: any[]) => {
-      const participantsList = users.map((u) => ({
+      const participantsList: Participant[] = users.map((u) => ({
         id: u.socketId,
         name: u.name || u.user?.name || "Usuario",
         avatar: u.avatar ?? u.user?.avatar ?? null,
         peerId: u.peerId,
+        micOn: u.micOn ?? false, // respetar estado real si el servidor lo envía, sino false
+        camOn: u.camOn ?? false,
       }));
       setParticipants(participantsList);
     });
 
+    // ── user-connected: nuevo participante entra ─────────────
     socket.on("user-connected", ({ socketId, name, avatar, peerId }) => {
       setParticipants((prev) => [
         ...prev,
-        { id: socketId, name: name || "Usuario", avatar, peerId },
+        {
+          id: socketId,
+          name: name || "Usuario",
+          avatar,
+          peerId,
+          micOn: false, // apagado por defecto hasta que el participante active
+          camOn: false,
+        },
       ]);
 
       if (peerId) {
@@ -149,6 +171,24 @@ export const useWebRTC = (
         callsRef.current[peerId] = call;
       }
     });
+
+    // ── media-state: alguien cambió su mic o cámara ──────────
+    socket.on(
+      "media-state",
+      ({
+        socketId,
+        micOn,
+        camOn,
+      }: {
+        socketId: string;
+        micOn: boolean;
+        camOn: boolean;
+      }) => {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === socketId ? { ...p, micOn, camOn } : p)),
+        );
+      },
+    );
 
     socket.on(
       "user-disconnected",
@@ -188,28 +228,39 @@ export const useWebRTC = (
     }
 
     participants.forEach((participant) => {
-      const targetPeerId = participant.peerId;
+      if (!participant.peerId) return;
 
-      if (targetPeerId) {
-        if (callsRef.current[targetPeerId]) {
-          callsRef.current[targetPeerId].close();
-        }
-
-        const newCall = peerRef.current!.call(targetPeerId, currentLocalStream);
-
-        newCall.on("stream", (userVideoStream) => {
-          setRemoteStreams((prev) => {
-            const filtered = prev.filter((s) => s.id !== targetPeerId);
-            return [...filtered, { id: targetPeerId, stream: userVideoStream }];
-          });
-        });
-
-        callsRef.current[targetPeerId] = newCall;
+      if (callsRef.current[participant.peerId]) {
+        callsRef.current[participant.peerId].close();
+        delete callsRef.current[participant.peerId];
       }
+
+      const newCall = peerRef.current!.call(
+        participant.peerId,
+        currentLocalStream,
+      );
+
+      newCall.on("stream", (userVideoStream) => {
+        const peerId = participant.peerId!;
+        setRemoteStreams((prev) => {
+          const filtered = prev.filter((s) => s.id !== peerId);
+          return [...filtered, { id: peerId, stream: userVideoStream }];
+        });
+      });
+
+      newCall.on("error", (err) => {
+        console.warn(`Error en llamada con ${participant.peerId}:`, err);
+      });
+
+      callsRef.current[participant.peerId] = newCall;
     });
+  }, [participants, localStream, screenStream]);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localStream, screenStream]);
-
-  return { remoteStreams, participants, socketRef, cleanupPeerConnections };
+  return {
+    remoteStreams,
+    participants,
+    socketRef,
+    cleanupPeerConnections,
+    emitMediaState, // ← exportar para usarlo en Room.tsx
+  };
 };

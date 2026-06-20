@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
-import { db } from "../../config/firebase";
+import { useEffect, useState, useRef } from "react";
 import {
   collection,
   query,
@@ -9,7 +8,9 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
-// Interfaz para tipar los mensajes de Firestore
+import { db } from "../../config/firebase";
+
+// Interface to type the messages from Firestore
 interface Message {
   id: string;
   text: string;

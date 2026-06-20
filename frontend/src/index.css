@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* RESET BÁSICO */
+/* Reset */
 html,
 body,
 #root {
@@ -22,6 +22,16 @@ body {
 
 :root {
   --animate-spin: spin 1s linear infinite;
+}
+
+@layer base {
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
 }
 
 .animate-fade-in {

@@ -8,7 +8,7 @@ const navItems = [
   { label: "Community", href: "#", active: false },
 ];
 
-export const LandingHeaderSection = () => {
+export const Header = () => {
   return (
     <header className="fixed top-0 left-0 z-50 flex w-full items-center justify-between border-b border-[#40484e4c] bg-[#131313cc] px-16 py-4 backdrop-blur-md max-md:px-6">
       {/* Logo */}
@@ -18,15 +18,12 @@ export const LandingHeaderSection = () => {
         className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8ecdfd] focus-visible:ring-offset-2 focus-visible:ring-offset-[#131313]"
       >
         <h1 className="font-['Sora'] text-2xl font-bold tracking-[-0.03em] text-[#8ecdfd]">
-          EstudioSíncrono
+          Space UV
         </h1>
       </a>
 
       {/* Navigation */}
-      <nav
-        aria-label="Primary"
-        className="hidden md:flex items-center gap-8"
-      >
+      <nav aria-label="Primary" className="hidden md:flex items-center gap-8">
         {navItems.map((item) => (
           <a
             key={item.label}
@@ -46,9 +43,9 @@ export const LandingHeaderSection = () => {
       {/* CTA */}
       <div className="flex items-center gap-6">
         <Link
-            to="/login"
-            aria-label="Iniciar sesión"
-            className="
+          to="/login"
+          aria-label="Iniciar sesión"
+          className="
                 inline-flex
                 items-center
                 gap-2
@@ -72,13 +69,13 @@ export const LandingHeaderSection = () => {
                 focus-visible:ring-offset-2
                 focus-visible:ring-offset-[#131313]
             "
-            >
-            <LogIn className="w-4 h-4" />
-            Entrar
+        >
+          <LogIn className="w-4 h-4" />
+          Entrar
         </Link>
       </div>
     </header>
   );
 };
 
-export default LandingHeaderSection;
+export default Header;
