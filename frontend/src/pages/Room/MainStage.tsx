@@ -23,6 +23,7 @@ const RemoteVideo = ({
 };
 
 interface MainStageProps {
+  isPresenterMode: boolean;
   isScreenSharing: boolean;
   screenVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteStreams: RemoteStream[];
@@ -35,6 +36,7 @@ export default function MainStage({
   isScreenSharing,
   screenVideoRef,
   remoteStreams,
+  isPresenterMode,
   activeScreenStream,
   myStream,
   pinnedUserId,
@@ -52,7 +54,13 @@ export default function MainStage({
   }
 
   return (
-    <div className="flex-1 bg-[#1A1A1A] rounded-2xl overflow-hidden relative border border-gray-800 flex flex-col">
+    <div
+      className={`flex-1 min-h-[360px] bg-[#1A1A1A] rounded-2xl overflow-hidden relative border flex flex-col transition-all duration-300 ${
+        isPresenterMode
+          ? "lg:flex-[1_1_75%] border-sky-500/40 shadow-[0_0_40px_rgba(14,165,233,0.12)]"
+          : "border-gray-800"
+      }`}
+    >
       {isScreenSharing ? (
         <video
           ref={screenVideoRef}

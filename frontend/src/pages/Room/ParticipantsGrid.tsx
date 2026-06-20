@@ -22,6 +22,7 @@ export interface UserProfile {
 }
 
 export interface ParticipantsGridProps {
+  isPresenterMode: boolean;
   profile: UserProfile;
   isCameraOn: boolean;
   isMicrophoneOn: boolean;
@@ -195,6 +196,7 @@ function AvatarCard({
  */
 export default function ParticipantsGrid({
   profile,
+  isPresenterMode,
   isCameraOn,
   isMicrophoneOn,
   localVideoRef,
@@ -213,6 +215,14 @@ export default function ParticipantsGrid({
       ? "border-sky-500 ring-2 ring-sky-500/50 scale-[0.98]"
       : "border-gray-800 bg-[#1E1E1E]";
 
+  const cardSizeClass = isPresenterMode
+    ? "h-20"
+    : isSingleParticipant
+      ? "h-36"
+      : "aspect-video";
+
+  const cardMinHeight = isPresenterMode ? 80 : isSingleParticipant ? 144 : 72;
+
   return (
     <div className="shrink-0 flex flex-col">
       {/* ── Room Stats ── */}
@@ -230,13 +240,17 @@ export default function ParticipantsGrid({
 
       {/* ── Dynamic Grid ── */}
       <div
-        className={`grid ${getGridCols(total)} gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar`}
+        className={`grid ${
+          isPresenterMode ? "grid-cols-2" : getGridCols(total)
+        } gap-2 overflow-y-auto pr-1 custom-scrollbar ${
+          isPresenterMode ? "max-h-40" : "max-h-56"
+        }`}
       >
         {/* 1. LOCAL USER CARD */}
         <div
           onClick={() => onPinUser("local")}
-          className={`${baseCardStyles} ${getPinStyles(pinnedUserId === "local")} ${isSingleParticipant ? "h-36" : "aspect-video"}`}
-          style={{ minHeight: isSingleParticipant ? 144 : 72 }}
+          className={`${baseCardStyles} ${getPinStyles(pinnedUserId === "local")} ${cardSizeClass}`}
+          style={{ minHeight: cardMinHeight }}
           role="button"
           tabIndex={0}
           aria-label="Fijar mi video"
@@ -298,8 +312,8 @@ export default function ParticipantsGrid({
             <div
               key={participant.id}
               onClick={() => onPinUser(streamKey)}
-              className={`${baseCardStyles} ${getPinStyles(pinnedUserId === streamKey)} ${isSingleParticipant ? "h-36" : "aspect-video"}`}
-              style={{ minHeight: isSingleParticipant ? 144 : 72 }}
+              className={`${baseCardStyles} ${getPinStyles(pinnedUserId === streamKey)} ${cardSizeClass}`}
+              style={{ minHeight: cardMinHeight }}
               role="button"
               tabIndex={0}
               aria-label={`Fijar video de ${participant.name}`}

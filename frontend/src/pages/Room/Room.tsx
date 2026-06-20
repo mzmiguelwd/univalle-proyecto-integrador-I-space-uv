@@ -87,6 +87,8 @@ export default function Room() {
   const activeScreenStream =
     screenStreams.length > 0 ? screenStreams[screenStreams.length - 1] : null;
 
+  const isPresenterMode = isScreenSharing || Boolean(activeScreenStream);
+
   // MEDIA CONTROL HANDLERS
   const toggleCamera = async () => {
     if (!isCameraOn) {
@@ -245,9 +247,14 @@ export default function Room() {
         onClose={() => setPermissionError(null)}
       />
 
-      <div className="flex-1 flex overflow-hidden p-4 gap-4">
+      <div
+        className={`flex-1 flex overflow-hidden p-4 gap-4 transition-all duration-300 ${
+          isPresenterMode ? "flex-col lg:flex-row" : "flex-col lg:flex-row"
+        }`}
+      >
         <MainStage
           isScreenSharing={isScreenSharing}
+          isPresenterMode={isPresenterMode}
           screenVideoRef={screenVideoRef}
           remoteStreams={remoteStreams}
           activeScreenStream={activeScreenStream}
@@ -255,9 +262,16 @@ export default function Room() {
           pinnedUserId={pinnedUserId}
         />
 
-        <div className="w-80 lg:w-[380px] flex flex-col gap-4">
+        <div
+          className={`flex flex-col gap-4 transition-all duration-300 ${
+            isPresenterMode
+              ? "w-full lg:w-[280px] xl:w-[320px]"
+              : "w-full lg:w-[380px]"
+          }`}
+        >
           <ParticipantsGrid
             profile={profile}
+            isPresenterMode={isPresenterMode}
             isCameraOn={isCameraOn}
             isMicrophoneOn={isMicrophoneOn}
             localVideoRef={localVideoRef}
