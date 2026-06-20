@@ -2,9 +2,22 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import Peer, { type MediaConnection } from "peerjs";
 
-const SOCKET_SERVER_URL =
-  import.meta.env.VITE_SOCKET_SERVER_URL || "http://localhost:3000";
+const envSocketUrl = import.meta.env.VITE_SOCKET_SERVER_URL?.trim();
+const defaultSocketUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+const SOCKET_SERVER_URL = envSocketUrl || defaultSocketUrl;
 
+if (typeof window !== "undefined" && !envSocketUrl) {
+  console.warn(
+    "[WARN] VITE_SOCKET_SERVER_URL no está definido. En producción esto probablemente causa un timeout al conectar Socket.IO/PeerJS.",
+    "Usando fallback:",
+    SOCKET_SERVER_URL,
+  );
+}
+
+console.info("Socket server config: ", {
+  envUrl: envSocketUrl,
+  computedUrl: SOCKET_SERVER_URL,
+});
 const url = new URL(SOCKET_SERVER_URL);
 const peerHost = url.hostname;
 let peerPort;
@@ -15,6 +28,7 @@ if (url.port) {
 } else {
   peerPort = 80;
 }
+console.info("Socket peer config:", { host: peerHost, port: peerPort, secure: url.protocol === "https:" });
 
 const PEERJS_CONFIG = {
   host: peerHost,
@@ -105,7 +119,8 @@ export const useWebRTC = (
     if (!roomId || !currentUser.uid) return;
 
     const socket = io(SOCKET_SERVER_URL, {
-      transports: ["websocket", "polling"],
+      transports: ["polling"],
+      path: "/socket.io",
     });
     socketRef.current = socket;
 
