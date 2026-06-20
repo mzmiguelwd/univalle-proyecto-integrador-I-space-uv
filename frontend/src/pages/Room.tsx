@@ -231,8 +231,17 @@ export default function Room() {
       }
     } else {
       myStream?.getTracks().forEach((t) => t.stop());
+
+      socketRef.current?.emit("camera-stopped", {
+        roomId,
+      });
+
       setMyStream(null);
-      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+
       setIsCameraOn(false);
       emitMediaState(isMicrophoneOn, false);
     }
@@ -266,13 +275,16 @@ export default function Room() {
         stream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
           setScreenStream(null);
+          socketRef.current?.emit("screen-share-stopped", { roomId });
           if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
         };
+        socketRef.current?.emit("screen-share-started", { roomId });
       } catch (err) {
         console.error("Error al compartir pantalla:", err);
       }
     } else {
       screenStream?.getTracks().forEach((t) => t.stop());
+      socketRef.current?.emit("screen-share-stopped", { roomId });
       setScreenStream(null);
       if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
       setIsScreenSharing(false);
@@ -295,6 +307,21 @@ export default function Room() {
   };
 
   const totalParticipants = participants.length + 1;
+
+  
+
+  const screenStreams = remoteStreams.filter(
+    (stream) => stream.type === "screen",
+  );
+
+  const cameraStreams = remoteStreams.filter(
+    (stream) => stream.type === "camera",
+  );
+
+  const activeScreenStream =
+    screenStreams.length > 0
+      ? screenStreams[screenStreams.length - 1]
+      : null;
 
   if (!profile) {
     return (
@@ -353,9 +380,9 @@ export default function Room() {
               muted
               className="w-full h-full object-contain bg-black"
             />
-          ) : remoteStreams.length > 0 ? (
+          ) : activeScreenStream ? (
             <RemoteVideo
-              stream={remoteStreams[remoteStreams.length - 1].stream}
+              stream={activeScreenStream.stream}
               className="w-full h-full object-contain bg-black"
             />
           ) : (
@@ -369,7 +396,7 @@ export default function Room() {
             <MonitorUp className="w-4 h-4" />
             {isScreenSharing
               ? "Tu presentación"
-              : remoteStreams.length > 0
+              : activeScreenStream
                 ? "Viendo presentación externa"
                 : "El área está libre"}
           </div>
@@ -384,7 +411,7 @@ export default function Room() {
             isMicrophoneOn={isMicrophoneOn}
             localVideoRef={localVideoRef}
             participants={participants}
-            remoteStreams={remoteStreams}
+            remoteStreams={cameraStreams}
           />
 
           {/* Panel de Chat */}

@@ -91,6 +91,34 @@ io.on("connection", (socket: Socket) => {
       camOn,
     });
   });
+
+  socket.on("webrtc-offer", ({ offer, to }) => {
+    socket.to(to).emit("webrtc-offer", {
+      offer,
+      from: socket.id,
+    });
+  });
+
+  socket.on("webrtc-answer", ({ answer, to }) => {
+    socket.to(to).emit("webrtc-answer", {
+      answer,
+      from: socket.id,
+    });
+  });
+
+  socket.on("webrtc-ice-candidate", ({ candidate, to }) => {
+    socket.to(to).emit("webrtc-ice-candidate", {
+      candidate,
+      from: socket.id,
+    });
+  });
+
+
+  socket.on("screen-share-started", ({ roomId }) => {
+    socket.to(roomId).emit("screen-share-started", {
+      socketId: socket.id,
+    });
+  });
   
   socket.on("end-room", async ({ roomId }) => {
     console.log(`Anfitrión (${socket.id}) finalizó la sala: ${roomId}`);
@@ -103,6 +131,18 @@ io.on("connection", (socket: Socket) => {
     if (roomId) {
       socket.to(roomId).emit("user-disconnected", socket.id, peerId);
     }
+  });
+
+  socket.on("screen-share-stopped", ({ roomId }) => {
+    socket.to(roomId).emit("screen-share-stopped", {
+      socketId: socket.id,
+    });
+  });
+
+  socket.on("camera-stopped", ({ roomId }) => {
+    socket.to(roomId).emit("camera-stopped", {
+      socketId: socket.id,
+    });
   });
 
   socket.on("disconnect", () => {
