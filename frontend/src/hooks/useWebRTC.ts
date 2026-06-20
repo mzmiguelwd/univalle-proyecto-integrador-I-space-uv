@@ -219,26 +219,44 @@ export const useWebRTC = (
   useEffect(() => {
     if (!peerRef.current || participants.length === 0) return;
 
-    const currentLocalStream = localStream || new MediaStream();
-
-    if (screenStream) {
-      screenStream.getTracks().forEach((track) => {
-        currentLocalStream.addTrack(track);
-      });
-    }
+    // Build a combined stream of current local + screen tracks
+    const combined = getCombinedStream();
 
     participants.forEach((participant) => {
       if (!participant.peerId) return;
 
-      if (callsRef.current[participant.peerId]) {
-        callsRef.current[participant.peerId].close();
-        delete callsRef.current[participant.peerId];
+      const existingCall = callsRef.current[participant.peerId];
+
+      if (existingCall) {
+        // Try to replace existing RTCRtpSender tracks (audio/video)
+        try {
+          // peerjs exposes underlying RTCPeerConnection at `peerConnection`
+          const pc: any = (existingCall as any).peerConnection;
+          if (pc && typeof pc.getSenders === "function") {
+            const senders: RTCRtpSender[] = pc.getSenders();
+
+            const newVideo = combined.getVideoTracks()[0] || null;
+            const newAudio = combined.getAudioTracks()[0] || null;
+
+            senders.forEach((sender) => {
+              if (!sender || !sender.track) return;
+              if (sender.track.kind === "video") {
+                sender.replaceTrack(newVideo);
+              }
+              if (sender.track.kind === "audio") {
+                sender.replaceTrack(newAudio);
+              }
+            });
+          }
+        } catch (err) {
+          console.warn("No se pudo reemplazar tracks en call existente:", err);
+        }
+
+        return; // avoid re-calling the peer
       }
 
-      const newCall = peerRef.current!.call(
-        participant.peerId,
-        currentLocalStream,
-      );
+      // If there's no existing call, create a new one
+      const newCall = peerRef.current!.call(participant.peerId, combined);
 
       newCall.on("stream", (userVideoStream) => {
         const peerId = participant.peerId!;
@@ -254,6 +272,7 @@ export const useWebRTC = (
 
       callsRef.current[participant.peerId] = newCall;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participants, localStream, screenStream]);
 
   return {

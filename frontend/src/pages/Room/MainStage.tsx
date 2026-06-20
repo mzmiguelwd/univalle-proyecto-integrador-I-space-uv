@@ -39,13 +39,12 @@ export default function MainStage({
 }: MainStageProps) {
   let displayedStream = null;
 
-  if (isScreenSharing) {
+  // When not presenting a screen, choose a video to display in the main stage
+  if (!isScreenSharing) {
     if (pinnedUserId === "local" && myStream) {
       displayedStream = myStream;
     } else if (pinnedUserId) {
-      displayedStream = remoteStreams.find(
-        (s) => s.id === pinnedUserId,
-      )?.stream;
+      displayedStream = remoteStreams.find((s) => s.id === pinnedUserId)?.stream;
     } else if (remoteStreams.length > 0) {
       displayedStream = remoteStreams[remoteStreams.length - 1].stream;
     }

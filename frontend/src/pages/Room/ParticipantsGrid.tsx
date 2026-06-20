@@ -121,7 +121,6 @@ function RemoteVideoCard({
         ref={videoRef}
         autoPlay
         playsInline
-        muted
         className="w-full h-full object-cover rounded-xl"
       >
         <track kind="captions" label="Captions" />
