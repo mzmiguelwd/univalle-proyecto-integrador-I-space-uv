@@ -4,20 +4,19 @@ import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-import { auth, db } from "./config/firebase";
+import { auth, db } from "./config/firebase.ts";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
-import Dashboard from "./pages/Dashboard";
-import SetupProfile from "./pages/SetupProfile";
-import LandingPage from "./pages/LandingPage";
-import AuthLoadingScreen from "./components/auth/AuthLoadingScreen";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
-import Profile from "./pages/Profile";
-import OldDashboard from "./pages/ProvisionalDashboard";
-import CreateRoom from "./pages/CreateRoom";
-import Room from "./pages/Room";
+import Login from "./pages/Login.tsx";
+import Register from "./pages/Register.tsx";
+import ForgotPassword from "./pages/ForgotPassword.tsx";
+import Dashboard from "./pages/Dashboard/Dashboard.tsx";
+import SetupProfile from "./pages/SetupProfile.tsx";
+import LandingPage from "./pages/Landing/Landing.tsx";
+import AuthLoadingScreen from "./components/auth/AuthLoadingScreen.tsx";
+import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
+import Profile from "./pages/Dashboard/Profile/Profile.tsx";
+import Room from "./pages/Room/Room.tsx";
+import CreateRoom from "./pages/Dashboard/Home/CreateRoom.tsx";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -192,18 +191,6 @@ function App() {
               }
               replace
             />
-          }
-        />
-        {/* Ruta Protegida Definitiva */}
-        <Route
-          path="/dashboard-old"
-          element={
-            <ProtectedRoute
-              isAllowed={Boolean(user) && hasUsername}
-              redirectTo={!user ? "/login" : "/setup-profile"}
-            >
-              <OldDashboard user={user as User} />
-            </ProtectedRoute>
           }
         />
       </Routes>
