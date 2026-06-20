@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { MonitorUp, Pin } from "lucide-react";
+import type { RemoteStream } from "../../hooks/useWebRTC";
 
-// Internal helper to render remote videos
 const RemoteVideo = ({
   stream,
   className = "w-full h-full object-cover",
@@ -25,7 +25,8 @@ const RemoteVideo = ({
 interface MainStageProps {
   isScreenSharing: boolean;
   screenVideoRef: React.RefObject<HTMLVideoElement | null>;
-  remoteStreams: { id: string; stream: MediaStream }[];
+  remoteStreams: RemoteStream[];
+  activeScreenStream: RemoteStream | null;
   myStream: MediaStream | null;
   pinnedUserId: string | null;
 }
@@ -34,21 +35,20 @@ export default function MainStage({
   isScreenSharing,
   screenVideoRef,
   remoteStreams,
+  activeScreenStream,
   myStream,
   pinnedUserId,
 }: MainStageProps) {
-  let displayedStream = null;
+  let displayedStream: MediaStream | null = null;
 
-  if (isScreenSharing) {
-    if (pinnedUserId === "local" && myStream) {
-      displayedStream = myStream;
-    } else if (pinnedUserId) {
-      displayedStream = remoteStreams.find(
-        (s) => s.id === pinnedUserId,
-      )?.stream;
-    } else if (remoteStreams.length > 0) {
-      displayedStream = remoteStreams[remoteStreams.length - 1].stream;
-    }
+  if (pinnedUserId === "local" && myStream) {
+    displayedStream = myStream;
+  } else if (pinnedUserId) {
+    displayedStream =
+      remoteStreams.find((s) => s.id === pinnedUserId && s.type === "camera")
+        ?.stream ?? null;
+  } else if (activeScreenStream) {
+    displayedStream = activeScreenStream.stream;
   }
 
   return (
@@ -64,7 +64,9 @@ export default function MainStage({
       ) : displayedStream ? (
         <RemoteVideo
           stream={displayedStream}
-          className={`w-full h-full object-contain bg-black ${pinnedUserId === "local" ? "transform scale-x-[-1]" : ""}`}
+          className={`w-full h-full object-contain bg-black ${
+            pinnedUserId === "local" ? "transform scale-x-[-1]" : ""
+          }`}
         />
       ) : (
         <div className="absolute inset-0 bg-linear-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
@@ -83,7 +85,7 @@ export default function MainStage({
           <>
             <Pin className="w-4 h-4" /> Video fijado
           </>
-        ) : remoteStreams.length > 0 ? (
+        ) : activeScreenStream ? (
           <>
             <MonitorUp className="w-4 h-4" /> Viendo presentación externa
           </>

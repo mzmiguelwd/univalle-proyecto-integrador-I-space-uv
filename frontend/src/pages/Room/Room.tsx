@@ -81,6 +81,12 @@ export default function Room() {
   const { remoteStreams, participants, socketRef, cleanupPeerConnections } =
     useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
 
+  const screenStreams = remoteStreams.filter((stream) => stream.type === "screen");
+  const cameraStreams = remoteStreams.filter((stream) => stream.type === "camera");
+
+  const activeScreenStream =
+    screenStreams.length > 0 ? screenStreams[screenStreams.length - 1] : null;
+
   // MEDIA CONTROL HANDLERS
   const toggleCamera = async () => {
     if (!isCameraOn) {
@@ -106,6 +112,9 @@ export default function Room() {
       }
     } else {
       myStream?.getVideoTracks().forEach((track) => track.stop());
+
+      socketRef.current?.emit("camera-stopped", { roomId });
+
       setIsCameraOn(false);
 
       if (!isMicrophoneOn) {
@@ -158,6 +167,7 @@ export default function Room() {
         });
         setIsScreenSharing(true);
         setScreenStream(stream);
+        socketRef.current?.emit("screen-share-started", { roomId });
         setTimeout(() => {
           if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
         }, 100);
@@ -165,6 +175,7 @@ export default function Room() {
         stream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
           setScreenStream(null);
+          socketRef.current?.emit("screen-share-stopped", { roomId });
           if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
         };
       } catch (error) {
@@ -172,6 +183,7 @@ export default function Room() {
       }
     } else {
       screenStream?.getTracks().forEach((track) => track.stop());
+      socketRef.current?.emit("screen-share-stopped", { roomId });
       setScreenStream(null);
       if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
       setIsScreenSharing(false);
@@ -238,6 +250,7 @@ export default function Room() {
           isScreenSharing={isScreenSharing}
           screenVideoRef={screenVideoRef}
           remoteStreams={remoteStreams}
+          activeScreenStream={activeScreenStream}
           myStream={myStream}
           pinnedUserId={pinnedUserId}
         />
@@ -249,7 +262,7 @@ export default function Room() {
             isMicrophoneOn={isMicrophoneOn}
             localVideoRef={localVideoRef}
             participants={participants}
-            remoteStreams={remoteStreams}
+            remoteStreams={cameraStreams}
             pinnedUserId={pinnedUserId}
             onPinUser={(id) =>
               setPinnedUserId((prev) => (prev === id ? null : id))
