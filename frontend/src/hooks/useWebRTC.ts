@@ -124,12 +124,19 @@ export const useWebRTC = (
           peerId: myPeerId,
         },
       });
+
+      // Reintentar la obtención de participantes en caso de que la lista inicial venga vacía
+      setTimeout(() => {
+        console.info("Solicitando presencia (request-presence) para asegurar lista de participantes...");
+        socket.emit("request-presence", { roomId });
+      }, 300);
     });
 
     const callPeer = (targetPeerId: string) => {
       if (!targetPeerId || callsRef.current[targetPeerId]) return;
 
       const combinedStream = getCombinedStream();
+      console.info(`Iniciando llamada a peer ${targetPeerId}`);
       const call = peer.call(targetPeerId, combinedStream);
       callsRef.current[targetPeerId] = call;
 
@@ -142,14 +149,18 @@ export const useWebRTC = (
     };
 
     peer.on("call", (call) => {
+      console.info(`Llamada entrante desde peer ${call.peer}. Respondiendo...`);
       const answerStream = getCombinedStream();
       if (answerStream.getTracks().length > 0) {
+        console.debug("Respondiendo con stream local combinado (audio/video)");
         call.answer(answerStream);
       } else {
+        console.debug("Respondiendo sin stream (sin pistas locales activas)");
         call.answer();
       }
 
       call.on("stream", (userVideoStream) => {
+        console.info(`Recibido stream remoto de ${call.peer}`);
         setRemoteStreams((prev) => {
           if (prev.some((s) => s.id === call.peer)) return prev;
           return [...prev, { id: call.peer, stream: userVideoStream }];
@@ -161,6 +172,7 @@ export const useWebRTC = (
 
     // ── room-users: lista inicial al unirse ─────────────────
     socket.on("room-users", (users: any[]) => {
+      console.info(`room-users recibido con ${users.length} entradas`);
       const participantsList: Participant[] = users.map((u) => ({
         id: u.socketId,
         name: u.name || u.user?.name || "Usuario",
@@ -171,13 +183,15 @@ export const useWebRTC = (
       }));
 
       setParticipants(participantsList);
+      console.debug("Participants state actualizado con room-users:", participantsList.map(p => ({id: p.id, peerId: p.peerId})));
     });
 
     // ── user-connected: nuevo participante entra ─────────────
     socket.on("user-connected", ({ socketId, name, avatar, peerId }) => {
+      console.info(`user-connected: ${socketId} (peerId=${peerId}) nombre=${name}`);
       setParticipants((prev) => {
         if (prev.some((p) => p.id === socketId)) return prev;
-        return [
+        const next = [
           ...prev,
           {
             id: socketId,
@@ -188,9 +202,12 @@ export const useWebRTC = (
             camOn: false,
           },
         ];
+        console.debug("Participants state tras user-connected:", next.map(p => ({id: p.id, peerId: p.peerId})));
+        return next;
       });
 
       if (peerId && peerId !== peer.id) {
+        console.info(`Solicitando conexión a peerId ${peerId}`);
         callPeer(peerId);
       }
     });
@@ -207,6 +224,7 @@ export const useWebRTC = (
         micOn: boolean;
         camOn: boolean;
       }) => {
+        console.info(`media-state de ${socketId}: micOn=${micOn} camOn=${camOn}`);
         setParticipants((prev) =>
           prev.map((p) => (p.id === socketId ? { ...p, micOn, camOn } : p)),
         );
@@ -216,6 +234,7 @@ export const useWebRTC = (
     socket.on(
       "user-disconnected",
       (userId: string, disconnectedPeerId: string) => {
+        console.info(`user-disconnected: socket ${userId} peer ${disconnectedPeerId}`);
         setParticipants((prev) => prev.filter((p) => p.id !== userId));
 
         if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
