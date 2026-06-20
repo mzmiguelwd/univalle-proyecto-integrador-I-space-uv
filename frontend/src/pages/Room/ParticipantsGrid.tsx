@@ -28,6 +28,7 @@ export interface ParticipantsGridProps {
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   participants: Participant[];
   remoteStreams: RemoteStream[];
+  remoteTracksUpdate: number;
   pinnedUserId: string | null;
   onPinUser: (id: string) => void;
 }
@@ -206,6 +207,7 @@ export default function ParticipantsGrid({
   localVideoRef,
   participants,
   remoteStreams,
+  remoteTracksUpdate,
   pinnedUserId,
   onPinUser,
 }: ParticipantsGridProps) {
@@ -224,7 +226,7 @@ export default function ParticipantsGrid({
       {/* ── Room Stats ── */}
       <div className="flex items-center justify-between text-xs text-gray-400 mb-2 px-1">
         <p>
-          {total} participante{total !== 1 ? "s" : ""}
+          {total} Participante{total !== 1 ? "s" : ""}
         </p>
 
         {pinnedUserId && (

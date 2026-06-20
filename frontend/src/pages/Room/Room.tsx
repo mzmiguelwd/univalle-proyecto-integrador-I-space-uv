@@ -80,10 +80,12 @@ export default function Room() {
   // CORE: WEBRTC
   const {
     remoteStreams,
+    remoteTracksUpdate,
     participants,
     socketRef,
     cleanupPeerConnections,
     emitMediaState,
+    updatePeerTracksCallback,
   } = useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
 
   // MEDIA CONTROL HANDLERS
@@ -100,12 +102,16 @@ export default function Room() {
         let newStream: MediaStream;
 
         if (hasAudio > 0 && localStreamRef.current) {
-          newStream = new MediaStream([
-            ...localStreamRef.current.getAudioTracks(),
-            ...videoStream.getVideoTracks(),
-          ]);
+          const audioTracks = localStreamRef.current.getAudioTracks();
+          const videoTracks = videoStream.getVideoTracks();
+          newStream = new MediaStream([...audioTracks, ...videoTracks]);
+          console.info("toggleCamera: nuevo stream con audio + video", {
+            audioCount: audioTracks.length,
+            videoCount: videoTracks.length,
+          });
         } else {
           newStream = videoStream;
+          console.info("toggleCamera: nuevo stream solo video");
         }
 
         localStreamRef.current = newStream;
@@ -114,7 +120,9 @@ export default function Room() {
         if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
 
         setIsCameraOn(true);
+        console.info("toggleCamera: activada");
         emitMediaState(isMicrophoneOn, true);
+        updatePeerTracksCallback?.();
       } catch (error) {
         console.error("Error al acceder a la cámara:", error);
         setPermissionError(
@@ -123,32 +131,34 @@ export default function Room() {
       }
     } else {
       localStreamRef.current?.getVideoTracks().forEach((track) => {
-        track.enabled = false;
         track.stop();
       });
 
-      const streamToKeep = localStreamRef.current;
-      const nextStream = streamToKeep
-        ? new MediaStream([...streamToKeep.getAudioTracks()])
-        : null;
+      const audioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+      const nextStream = audioTracks.length > 0 ? new MediaStream([...audioTracks]) : null;
 
       localStreamRef.current = nextStream;
       setIsCameraOn(false);
       setMyStream(nextStream);
-      emitMediaState(isMicrophoneOn, false);
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = nextStream;
       }
+
+      console.info("toggleCamera: desactivada", {
+        audioCount: audioTracks.length,
+      });
+      emitMediaState(isMicrophoneOn, false);
+      updatePeerTracksCallback?.();
     }
   };
 
   const toggleMicrophone = async () => {
     if (!isMicrophoneOn) {
-      const hasAudio = localStreamRef.current?.getAudioTracks().length ?? 0;
-      const hasVideo = localStreamRef.current?.getVideoTracks().length ?? 0;
+      const currentAudioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+      const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
 
-      if (hasAudio === 0) {
+      if (currentAudioTracks.length === 0) {
         try {
           setPermissionError(null);
           const audioStream = await navigator.mediaDevices.getUserMedia({
@@ -156,22 +166,20 @@ export default function Room() {
             audio: true,
           });
 
-          let newStream: MediaStream;
-          if (hasVideo > 0 && localStreamRef.current) {
-            newStream = new MediaStream([
-              ...localStreamRef.current.getVideoTracks(),
-              ...audioStream.getAudioTracks(),
-            ]);
-          } else {
-            newStream = audioStream;
-          }
+          const newAudioTracks = audioStream.getAudioTracks();
+          const newStream = new MediaStream([...currentVideoTracks, ...newAudioTracks]);
 
           localStreamRef.current = newStream;
           setMyStream(newStream);
           if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
 
           setIsMicrophoneOn(true);
+          console.info("toggleMicrophone: activado (new stream)", {
+            audioCount: newAudioTracks.length,
+            videoCount: currentVideoTracks.length,
+          });
           emitMediaState(true, isCameraOn);
+          updatePeerTracksCallback?.();
         } catch (error) {
           console.error("Error al acceder al micrófono:", error);
           setPermissionError(
@@ -179,30 +187,38 @@ export default function Room() {
           );
         }
       } else {
-        localStreamRef.current?.getAudioTracks().forEach((track) => {
+        // Ya hay track de audio, solo habilitar
+        currentAudioTracks.forEach((track) => {
           track.enabled = true;
         });
 
-        const nextStream = localStreamRef.current
-          ? new MediaStream([...localStreamRef.current.getTracks()])
-          : null;
+        const nextStream = new MediaStream([...currentAudioTracks, ...currentVideoTracks]);
         localStreamRef.current = nextStream;
         setMyStream(nextStream);
+
         setIsMicrophoneOn(true);
+        console.info("toggleMicrophone: activado (existing track)", {
+          audioCount: currentAudioTracks.length,
+        });
         emitMediaState(true, isCameraOn);
+        updatePeerTracksCallback?.();
       }
     } else {
-      localStreamRef.current?.getAudioTracks().forEach((track) => {
+      const currentAudioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+      const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
+
+      currentAudioTracks.forEach((track) => {
         track.enabled = false;
       });
 
-      const nextStream = localStreamRef.current
-        ? new MediaStream([...localStreamRef.current.getTracks()])
-        : null;
+      const nextStream = new MediaStream([...currentAudioTracks, ...currentVideoTracks]);
       localStreamRef.current = nextStream;
       setMyStream(nextStream);
+
       setIsMicrophoneOn(false);
+      console.info("toggleMicrophone: desactivado");
       emitMediaState(false, isCameraOn);
+      updatePeerTracksCallback?.();
     }
   };
 
@@ -306,6 +322,7 @@ export default function Room() {
             localVideoRef={localVideoRef}
             participants={participants}
             remoteStreams={remoteStreams}
+            remoteTracksUpdate={remoteTracksUpdate}
             pinnedUserId={pinnedUserId}
             onPinUser={(id) =>
               setPinnedUserId((prev) => (prev === id ? null : id))
