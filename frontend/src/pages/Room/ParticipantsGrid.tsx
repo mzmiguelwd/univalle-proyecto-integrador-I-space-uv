@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { VideoOff, MicOff, Pin } from "lucide-react";
 
 // Types & Interfaces
@@ -214,6 +214,23 @@ export default function ParticipantsGrid({
   const total = participants.length + 1; // +1 includes the local user
   const isSingleParticipant = total === 1;
 
+  // Recalculate video states when remoteTracksUpdate changes
+  // This ensures UI updates when track replacements occur
+  const remoteVideoStates = useMemo(() => {
+    const states: Record<string, boolean> = {};
+    participants.forEach((participant) => {
+      const streamKey = participant.peerId || participant.id;
+      const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
+      states[streamKey] = !!(
+        remoteVideo &&
+        remoteVideo.stream
+          .getVideoTracks()
+          .some((track) => track.readyState === "live" && track.enabled)
+      );
+    });
+    return states;
+  }, [participants, remoteStreams, remoteTracksUpdate]);
+
   // Base classes for video cards (handling the "Pin" interactive state)
   const baseCardStyles = `rounded-xl overflow-hidden relative border transition-all duration-200 cursor-pointer hover:border-sky-500/80 shadow-sm`;
   const getPinStyles = (isPinned: boolean) =>
@@ -294,13 +311,7 @@ export default function ParticipantsGrid({
           // Resolve the correct ID used for streaming (PeerJS ID)
           const streamKey = participant.peerId || participant.id;
           const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
-
-          // Check if the stream actually has active video tracks being sent
-          const hasActiveVideo =
-            !!remoteVideo &&
-            remoteVideo.stream
-              .getVideoTracks()
-              .some((track) => track.readyState === "live" && track.enabled);
+          const hasActiveVideo = remoteVideoStates[streamKey] || false;
 
           return (
             <div
@@ -312,7 +323,7 @@ export default function ParticipantsGrid({
               tabIndex={0}
               aria-label={`Fijar video de ${participant.name}`}
             >
-              {hasActiveVideo ? (
+              {hasActiveVideo && remoteVideo ? (
                 <RemoteVideoCard
                   stream={remoteVideo.stream}
                   participant={participant}
