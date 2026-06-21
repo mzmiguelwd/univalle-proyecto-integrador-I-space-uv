@@ -11,7 +11,7 @@ export default function ProtectedRoute({
   isAllowed,
   redirectTo,
   children,
-}: ProtectedRouteProps) {
+}: Readonly<ProtectedRouteProps>) {
   if (!isAllowed) {
     return <Navigate to={redirectTo} replace />;
   }
