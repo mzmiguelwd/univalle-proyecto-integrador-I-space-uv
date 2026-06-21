@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { VideoOff, MicOff, Pin } from "lucide-react";
 
 // Types & Interfaces
@@ -29,6 +29,7 @@ export interface ParticipantsGridProps {
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   participants: Participant[];
   remoteStreams: RemoteStream[];
+  remoteTracksUpdate: number;
   pinnedUserId: string | null;
   onPinUser: (id: string) => void;
 }
@@ -122,7 +123,6 @@ function RemoteVideoCard({
         ref={videoRef}
         autoPlay
         playsInline
-        muted
         className="w-full h-full object-cover rounded-xl"
       >
         <track kind="captions" label="Captions" />
@@ -153,14 +153,16 @@ function AvatarCard({
   avatar,
   isYou = false,
   micOn = true,
+  statusText,
 }: {
   name: string;
   avatar?: string | null;
   isYou?: boolean;
   micOn?: boolean;
+  statusText?: string;
 }) {
   return (
-    <div className="w-full h-full flex items-center justify-between gap-3 px-4 py-3 bg-[#111827] rounded-xl">
+    <div className="w-full h-full flex flex-col justify-between gap-3 px-4 py-3 bg-[#111827] rounded-xl">
       <div className="flex items-center gap-2.5 min-w-0">
         <ParticipantAvatar name={name} avatar={avatar} size={11} />
         <div className="min-w-0 flex flex-col">
@@ -171,7 +173,12 @@ function AvatarCard({
             )}
           </p>
           <div className="text-[10px] text-gray-400 mt-0.5">
-            <VideoOff className="w-3 h-3" aria-hidden="true" />
+            {statusText || (
+              <span className="inline-flex items-center gap-1">
+                <VideoOff className="w-3 h-3" aria-hidden="true" />
+                Cámara apagada
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -202,11 +209,29 @@ export default function ParticipantsGrid({
   localVideoRef,
   participants,
   remoteStreams,
+  remoteTracksUpdate,
   pinnedUserId,
   onPinUser,
 }: ParticipantsGridProps) {
   const total = participants.length + 1; // +1 includes the local user
   const isSingleParticipant = total === 1;
+
+  // Recalculate video states when remoteTracksUpdate changes
+  // This ensures UI updates when track replacements occur
+  const remoteVideoStates = useMemo(() => {
+    const states: Record<string, boolean> = {};
+    participants.forEach((participant) => {
+      const streamKey = participant.peerId || participant.id;
+      const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
+      states[streamKey] = !!(
+        remoteVideo &&
+        remoteVideo.stream
+          .getVideoTracks()
+          .some((track) => track.readyState === "live" && track.enabled)
+      );
+    });
+    return states;
+  }, [participants, remoteStreams, remoteTracksUpdate]);
 
   // Base classes for video cards (handling the "Pin" interactive state)
   const baseCardStyles = `rounded-xl overflow-hidden relative border transition-all duration-200 cursor-pointer hover:border-sky-500/80 shadow-sm`;
@@ -228,7 +253,7 @@ export default function ParticipantsGrid({
       {/* ── Room Stats ── */}
       <div className="flex items-center justify-between text-xs text-gray-400 mb-2 px-1">
         <p>
-          {total} participante{total !== 1 ? "s" : ""}
+          {total} Participante{total !== 1 ? "s" : ""}
         </p>
 
         {pinnedUserId && (
@@ -300,13 +325,7 @@ export default function ParticipantsGrid({
           // Resolve the correct ID used for streaming (PeerJS ID)
           const streamKey = participant.peerId || participant.id;
           const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
-
-          // Check if the stream actually has active video tracks being sent
-          const hasActiveVideo =
-            !!remoteVideo &&
-            remoteVideo.stream
-              .getVideoTracks()
-              .some((track) => track.readyState === "live" && track.enabled);
+          const hasActiveVideo = remoteVideoStates[streamKey] || false;
 
           return (
             <div
@@ -318,7 +337,7 @@ export default function ParticipantsGrid({
               tabIndex={0}
               aria-label={`Fijar video de ${participant.name}`}
             >
-              {hasActiveVideo ? (
+              {hasActiveVideo && remoteVideo ? (
                 <RemoteVideoCard
                   stream={remoteVideo.stream}
                   participant={participant}
@@ -328,6 +347,7 @@ export default function ParticipantsGrid({
                   name={participant.name}
                   avatar={participant.avatar}
                   micOn={participant.micOn}
+                  statusText="Conectando..."
                 />
               )}
             </div>

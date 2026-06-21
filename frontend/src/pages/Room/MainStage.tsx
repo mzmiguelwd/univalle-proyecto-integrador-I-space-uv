@@ -5,9 +5,11 @@ import type { RemoteStream } from "../../hooks/useWebRTC";
 const RemoteVideo = ({
   stream,
   className = "w-full h-full object-cover",
+  muted = false,
 }: {
   stream: MediaStream;
   className?: string;
+  muted?: boolean;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -16,7 +18,13 @@ const RemoteVideo = ({
   }, [stream]);
 
   return (
-    <video ref={videoRef} autoPlay playsInline className={className}>
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted={muted}
+      className={className}
+    >
       <track kind="captions" label="Captions" />
     </video>
   );
@@ -43,14 +51,17 @@ export default function MainStage({
 }: MainStageProps) {
   let displayedStream: MediaStream | null = null;
 
-  if (pinnedUserId === "local" && myStream) {
-    displayedStream = myStream;
-  } else if (pinnedUserId) {
-    displayedStream =
-      remoteStreams.find((s) => s.id === pinnedUserId && s.type === "camera")
-        ?.stream ?? null;
-  } else if (activeScreenStream) {
-    displayedStream = activeScreenStream.stream;
+  // When not presenting a screen, choose a video to display in the main stage
+  if (!isScreenSharing) {
+    if (pinnedUserId === "local" && myStream) {
+      displayedStream = myStream;
+    } else if (pinnedUserId) {
+      displayedStream = remoteStreams.find(
+        (s) => s.id === pinnedUserId,
+      )?.stream;
+    } else if (remoteStreams.length > 0) {
+      displayedStream = remoteStreams[remoteStreams.length - 1].stream;
+    }
   }
 
   return (
@@ -72,9 +83,8 @@ export default function MainStage({
       ) : displayedStream ? (
         <RemoteVideo
           stream={displayedStream}
-          className={`w-full h-full object-contain bg-black ${
-            pinnedUserId === "local" ? "transform scale-x-[-1]" : ""
-          }`}
+          muted={pinnedUserId === "local"}
+          className={`w-full h-full object-contain bg-black ${pinnedUserId === "local" ? "transform scale-x-[-1]" : ""}`}
         />
       ) : (
         <div className="absolute inset-0 bg-linear-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
