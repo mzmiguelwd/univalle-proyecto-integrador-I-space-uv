@@ -88,8 +88,12 @@ export default function Room() {
     updatePeerTracksCallback,
   } = useWebRTC(roomId!, myStream, screenStream, currentUser, handleRoomEnded);
 
-  const screenStreams = remoteStreams.filter((stream) => stream.type === "screen");
-  const cameraStreams = remoteStreams.filter((stream) => stream.type === "camera");
+  const screenStreams = remoteStreams.filter(
+    (stream) => stream.type === "screen",
+  );
+  const cameraStreams = remoteStreams.filter(
+    (stream) => stream.type === "camera",
+  );
 
   const activeScreenStream =
     screenStreams.length > 0 ? screenStreams[screenStreams.length - 1] : null;
@@ -138,20 +142,15 @@ export default function Room() {
         );
       }
     } else {
-<<<<<<< HEAD
       myStream?.getVideoTracks().forEach((track) => track.stop());
 
       socketRef.current?.emit("camera-stopped", { roomId });
 
       setIsCameraOn(false);
-=======
-      localStreamRef.current?.getVideoTracks().forEach((track) => {
-        track.stop();
-      });
->>>>>>> main
 
       const audioTracks = localStreamRef.current?.getAudioTracks() ?? [];
-      const nextStream = audioTracks.length > 0 ? new MediaStream([...audioTracks]) : null;
+      const nextStream =
+        audioTracks.length > 0 ? new MediaStream([...audioTracks]) : null;
 
       localStreamRef.current = nextStream;
       setIsCameraOn(false);
@@ -183,11 +182,15 @@ export default function Room() {
           });
 
           const newAudioTracks = audioStream.getAudioTracks();
-          const newStream = new MediaStream([...currentVideoTracks, ...newAudioTracks]);
+          const newStream = new MediaStream([
+            ...currentVideoTracks,
+            ...newAudioTracks,
+          ]);
 
           localStreamRef.current = newStream;
           setMyStream(newStream);
-          if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
+          if (localVideoRef.current)
+            localVideoRef.current.srcObject = newStream;
 
           setIsMicrophoneOn(true);
           console.info("toggleMicrophone: activado (new stream)", {
@@ -208,7 +211,10 @@ export default function Room() {
           track.enabled = true;
         });
 
-        const nextStream = new MediaStream([...currentAudioTracks, ...currentVideoTracks]);
+        const nextStream = new MediaStream([
+          ...currentAudioTracks,
+          ...currentVideoTracks,
+        ]);
         localStreamRef.current = nextStream;
         setMyStream(nextStream);
 
@@ -227,7 +233,10 @@ export default function Room() {
         track.enabled = false;
       });
 
-      const nextStream = new MediaStream([...currentAudioTracks, ...currentVideoTracks]);
+      const nextStream = new MediaStream([
+        ...currentAudioTracks,
+        ...currentVideoTracks,
+      ]);
       localStreamRef.current = nextStream;
       setMyStream(nextStream);
 
@@ -359,12 +368,8 @@ export default function Room() {
             isMicrophoneOn={isMicrophoneOn}
             localVideoRef={localVideoRef}
             participants={participants}
-<<<<<<< HEAD
-            remoteStreams={cameraStreams}
-=======
             remoteStreams={remoteStreams}
             remoteTracksUpdate={remoteTracksUpdate}
->>>>>>> main
             pinnedUserId={pinnedUserId}
             onPinUser={(id) =>
               setPinnedUserId((prev) => (prev === id ? null : id))

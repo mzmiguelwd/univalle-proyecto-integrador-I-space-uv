@@ -1,201 +1,137 @@
-import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { onAuthStateChanged } from "firebase/auth";
-import type { User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 
-import { auth, db } from "./config/firebase.ts";
+import { useAuthSession } from "./hooks/useAuthSession.ts";
+import ProtectedRoute from "./pages/Auth/ProtectedRoute.tsx";
+import PublicRoute from "./pages/Auth/PublicRoute.tsx";
 
-import Login from "./pages/Login.tsx";
-import Register from "./pages/Register.tsx";
-import ForgotPassword from "./pages/ForgotPassword.tsx";
+import Landing from "./pages/Landing/Landing.tsx";
+import Login from "./pages/Auth/Login.tsx";
+import SetupProfile from "./pages/Auth/SetupProfile.tsx";
+import Register from "./pages/Auth/Register.tsx";
+import ForgotPassword from "./pages/Auth/ForgotPassword.tsx";
 import Dashboard from "./pages/Dashboard/Dashboard.tsx";
-import SetupProfile from "./pages/SetupProfile.tsx";
-import LandingPage from "./pages/Landing/Landing.tsx";
-import AuthLoadingScreen from "./components/auth/AuthLoadingScreen.tsx";
-import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
+import AuthLoadingScreen from "./pages/Auth/AuthLoadingScreen.tsx";
 import Profile from "./pages/Dashboard/Profile/Profile.tsx";
 import Room from "./pages/Room/Room.tsx";
 import CreateRoom from "./pages/Dashboard/Home/CreateRoom.tsx";
 
-function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [hasUsername, setHasUsername] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
+export default function App() {
+  const { user, hasUsername, isLoading, setHasUsername } = useAuthSession();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
-
-      if (currentUser) {
-        setUser(currentUser);
-        try {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-
-          if (userDoc.exists() && userDoc.data().username) {
-            setHasUsername(true);
-          } else {
-            setHasUsername(false);
-          }
-        } catch (error) {
-          console.error("Error al verificar el nombre de usuario:", error);
-          setHasUsername(false);
-        }
-
-        setUser(currentUser);
-      } else {
-        setUser(null);
-        setHasUsername(false);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return <AuthLoadingScreen />;
   }
+
+  // Common authentication conditions for cleaner routing
+  const isFullyAuthenticated = Boolean(user) && hasUsername;
+  const protectedRedirect = user ? "/setup-profile" : "/login";
+
+  // Determine default route based on authentication state
+  const getDefaultRoute = () => {
+    if (!user) return "/login";
+    if (!hasUsername) return "/setup-profile";
+    return "/dashboard";
+  };
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* Ruta Raíz (Landing Page) */}
+        {/* Public Routes */}
         <Route
           path="/"
           element={
-            !user ? (
-              <LandingPage />
-            ) : (
-              <Navigate
-                to={hasUsername ? "/dashboard" : "/setup-profile"}
-                replace
-              />
-            )
+            <PublicRoute user={user} hasUsername={hasUsername}>
+              <Landing />
+            </PublicRoute>
           }
         />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute
-              isAllowed={Boolean(user) && hasUsername}
-              redirectTo={!user ? "/login" : "/setup-profile"}
-            >
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Rutas Públicas */}
         <Route
           path="/login"
           element={
-            !user ? (
+            <PublicRoute user={user} hasUsername={hasUsername}>
               <Login />
-            ) : (
-              <Navigate
-                to={hasUsername ? "/dashboard" : "/setup-profile"}
-                replace
-              />
-            )
+            </PublicRoute>
           }
         />
         <Route
           path="/register"
           element={
-            !user ? (
+            <PublicRoute user={user} hasUsername={hasUsername}>
               <Register />
-            ) : (
-              <Navigate
-                to={hasUsername ? "/dashboard" : "/setup-profile"}
-                replace
-              />
-            )
+            </PublicRoute>
           }
         />
         <Route
           path="/forgot-password"
           element={
-            !user ? (
+            <PublicRoute user={user} hasUsername={hasUsername}>
               <ForgotPassword />
-            ) : (
-              <Navigate
-                to={hasUsername ? "/dashboard" : "/setup-profile"}
-                replace
-              />
-            )
+            </PublicRoute>
           }
         />
 
-        {/* Ruta de Onboarding (Solo para usuarios logueados SIN username) */}
+        {/* Onboarding Route */}
         <Route
           path="/setup-profile"
           element={
             <ProtectedRoute
               isAllowed={Boolean(user) && !hasUsername}
-              redirectTo={!user ? "/login" : "/dashboard"}
+              redirectTo={user ? "/dashboard" : "/login"}
             >
               <SetupProfile onComplete={() => setHasUsername(true)} />
             </ProtectedRoute>
           }
         />
 
-        {/* Ruta Protegida Definitiva */}
+        {/* Protected Routes */}
         <Route
           path="/dashboard"
           element={
             <ProtectedRoute
-              isAllowed={Boolean(user) && hasUsername}
-              redirectTo={!user ? "/login" : "/setup-profile"}
+              isAllowed={isFullyAuthenticated}
+              redirectTo={protectedRedirect}
             >
               <Dashboard />
             </ProtectedRoute>
           }
         />
-
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute
+              isAllowed={isFullyAuthenticated}
+              redirectTo={protectedRedirect}
+            >
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/create-room"
           element={
             <ProtectedRoute
-              isAllowed={Boolean(user) && hasUsername}
-              redirectTo={!user ? "/login" : "/setup-profile"}
+              isAllowed={isFullyAuthenticated}
+              redirectTo={protectedRedirect}
             >
               <CreateRoom />
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/room/:roomId"
           element={
             <ProtectedRoute
-              isAllowed={Boolean(user) && hasUsername}
-              redirectTo={!user ? "/login" : "/setup-profile"}
+              isAllowed={isFullyAuthenticated}
+              redirectTo={protectedRedirect}
             >
               <Room />
             </ProtectedRoute>
           }
         />
 
-        {/* Redirección por defecto */}
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to={
-                user
-                  ? hasUsername
-                    ? "/dashboard"
-                    : "/setup-profile"
-                  : "/login"
-              }
-              replace
-            />
-          }
-        />
+        {/* Fallback Route */}
+        <Route path="*" element={<Navigate to={getDefaultRoute()} replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;

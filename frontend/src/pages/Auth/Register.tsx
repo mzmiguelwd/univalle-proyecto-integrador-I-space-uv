@@ -4,7 +4,7 @@ import {
   registerWithEmail,
   loginWithGoogle,
   checkUsernameAvailability,
-} from "../config/auth.ts";
+} from "../../config/auth.ts";
 
 // ── Avatares predefinidos ──────────────────────────────────────
 const AVATARS = [

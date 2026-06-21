@@ -18,8 +18,8 @@ import {
 } from "../../../config/rooms.ts";
 
 import NavigationSidebar from "../NavigationSidebar.tsx";
-import ReAuthModal from "../../../components/auth/ReAuthModal.tsx";
-import FocusTrap from "../../../components/accessibility/FocusTrap.tsx";
+import ReAuthModal from "../../Auth/ReAuthModal.tsx";
+import FocusTrap from "../../Auth/FocusTrap.tsx";
 import RoomCard from "../Home/RoomCard.tsx";
 import RoomsEmptyState from "../Home/RoomsEmptyState.tsx";
 
