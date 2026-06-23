@@ -4,7 +4,7 @@ import { Eye, EyeOff, AlertCircle, Loader2, Check } from "lucide-react";
 
 import { loginWithEmail, loginWithGoogle } from "../../config/auth.ts";
 
-// Utils
+// UTILS
 
 const getErrorMessage = (error: unknown): string => {
   const code =
@@ -23,7 +23,7 @@ const getErrorMessage = (error: unknown): string => {
   return errorMap[code] || "Credenciales inválidas o usuario no encontrado.";
 };
 
-// Sub-components
+// SUB-COMPONENTS
 
 const DesktopHeroPanel = () => (
   <div
@@ -97,20 +97,22 @@ const FormField = ({
   </div>
 );
 
+// MAIN COMPONENT
+
 export default function Login() {
   const navigate = useNavigate();
 
-  // Form State
+  // FORM STATE
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // UI State
+  // UI STATE
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handlers
+  // HANDLERS
 
   const handleEmailLogin = async (
     event: React.SubmitEvent<HTMLFormElement>,
@@ -150,8 +152,12 @@ export default function Login() {
     }
   };
 
+  // STYLES
+
   const inputStyles =
     "w-full bg-[#1a1d24] border border-white/10 rounded-lg px-4 py-3 text-white text-base sm:text-sm placeholder-white/25 focus:outline-none focus:border-[#5ab4e8]/60 focus:ring-1 focus:ring-[#5ab4e8]/20 transition-all";
+
+  // RENDER
 
   return (
     <main className="min-h-screen flex bg-[#0d0f14]">
@@ -173,7 +179,7 @@ export default function Login() {
             className="space-y-4 sm:space-y-5"
             noValidate
           >
-            {/* Error Message */}
+            {/* ERROR MESSAGE */}
             {error && (
               <div
                 role="alert"
@@ -184,19 +190,19 @@ export default function Login() {
               </div>
             )}
 
-            {/* Email Input */}
+            {/* EMAIL INPUT */}
             <FormField label="Correo electrónico">
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="correo@ejemplo.com"
                 autoComplete="email"
                 className={inputStyles}
               />
             </FormField>
 
-            {/* Password Input */}
+            {/* PASSWORD INPUT */}
             <FormField label="Contraseña">
               <div className="flex justify-end -mt-1 mb-1">
                 <Link
@@ -211,7 +217,7 @@ export default function Login() {
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
                   className={`${inputStyles} pr-11`}
@@ -233,13 +239,13 @@ export default function Login() {
               </div>
             </FormField>
 
-            {/* Remember Me Checkbox */}
+            {/* REMEMBER ME CHECKBOX */}
             <label className="flex items-center gap-3 cursor-pointer group py-1 w-fit">
               <div className="relative flex items-center justify-center">
                 <input
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
+                  onChange={(event) => setRememberMe(event.target.checked)}
                   className="sr-only peer"
                 />
                 <div
@@ -259,7 +265,7 @@ export default function Login() {
               </span>
             </label>
 
-            {/* Submit Button */}
+            {/* SUBMIT BUTTON */}
             <button
               type="submit"
               disabled={isLoading}
@@ -275,7 +281,7 @@ export default function Login() {
               )}
             </button>
 
-            {/* Divider */}
+            {/* DIVIDER */}
             <div className="relative my-1" aria-hidden="true">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-white/10" />
@@ -287,7 +293,7 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Google Login */}
+            {/* GOOGLE LOGIN */}
             <button
               type="button"
               onClick={handleGoogleLogin}
@@ -298,14 +304,14 @@ export default function Login() {
               <span>GOOGLE</span>
             </button>
 
-            {/* Register Link */}
+            {/* REGISTER LINK */}
             <p className="text-center text-sm text-white/40 pb-4 sm:pb-0 pt-2">
               ¿No tienes cuenta?{" "}
               <Link
                 to="/register"
                 className="text-[#5ab4e8] hover:text-[#7cc4ef] font-semibold transition-colors focus-visible:outline-none focus-visible:underline"
               >
-                Regístrate aquí
+                Regístrate Aquí
               </Link>
             </p>
           </form>

@@ -1,14 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { BookOpen, UserRound, Plus } from "lucide-react";
 
-import { type UserProfile } from "../../config/auth";
+import { type UserProfile } from "../../config/auth.ts";
 
 type Props = {
   activePage: "Inicio" | "Mi perfil";
   profile: UserProfile | null;
 };
 
-const navItems = [
+// CONSTANTS
+
+const NAV_ITEMS = [
   {
     label: "Inicio",
     icon: BookOpen,
@@ -21,7 +23,12 @@ const navItems = [
   },
 ];
 
-export default function NavigationSidebar({ activePage, profile }: Props) {
+// MAIN COMPONENT
+
+export default function NavigationSidebar({
+  activePage,
+  profile,
+}: Readonly<Props>) {
   const navigate = useNavigate();
 
   const displayName = profile?.name || "Usuario";
@@ -32,6 +39,8 @@ export default function NavigationSidebar({ activePage, profile }: Props) {
     .map((word) => word.charAt(0))
     .join("")
     .toUpperCase();
+
+  // RENDER
 
   return (
     <aside
@@ -55,7 +64,7 @@ export default function NavigationSidebar({ activePage, profile }: Props) {
         </div>
 
         <nav className="mt-12 space-y-3">
-          {navItems.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
 
             return (

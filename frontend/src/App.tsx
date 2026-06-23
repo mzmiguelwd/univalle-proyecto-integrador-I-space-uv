@@ -1,19 +1,22 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import { useAuthSession } from "./hooks/useAuthSession.ts";
+
 import ProtectedRoute from "./pages/Auth/ProtectedRoute.tsx";
 import PublicRoute from "./pages/Auth/PublicRoute.tsx";
 
 import Landing from "./pages/Landing/Landing.tsx";
-import Login from "./pages/Auth/Login.tsx";
-import SetupProfile from "./pages/Auth/SetupProfile.tsx";
 import Register from "./pages/Auth/Register.tsx";
+import SetupProfile from "./pages/Auth/SetupProfile.tsx";
+import Login from "./pages/Auth/Login.tsx";
 import ForgotPassword from "./pages/Auth/ForgotPassword.tsx";
-import Dashboard from "./pages/Dashboard/Dashboard.tsx";
 import AuthLoadingScreen from "./pages/Auth/AuthLoadingScreen.tsx";
+import Dashboard from "./pages/Dashboard/Dashboard.tsx";
 import Profile from "./pages/Dashboard/Profile/Profile.tsx";
-import Room from "./pages/Room/Room.tsx";
 import CreateRoom from "./pages/Dashboard/Home/CreateRoom.tsx";
+import Room from "./pages/Room/Room.tsx";
+
+// MAIN COMPONENT
 
 export default function App() {
   const { user, hasUsername, isLoading, setHasUsername } = useAuthSession();
@@ -33,10 +36,12 @@ export default function App() {
     return "/dashboard";
   };
 
+  // RENDER
+
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
+        {/* PUBLIC ROUTES */}
         <Route
           path="/"
           element={
@@ -70,7 +75,7 @@ export default function App() {
           }
         />
 
-        {/* Onboarding Route */}
+        {/* ONBOARDING ROUTE */}
         <Route
           path="/setup-profile"
           element={
@@ -83,7 +88,7 @@ export default function App() {
           }
         />
 
-        {/* Protected Routes */}
+        {/* PROTECTED ROUTES */}
         <Route
           path="/dashboard"
           element={
@@ -129,7 +134,7 @@ export default function App() {
           }
         />
 
-        {/* Fallback Route */}
+        {/* FALLBACK ROUTE */}
         <Route path="*" element={<Navigate to={getDefaultRoute()} replace />} />
       </Routes>
     </BrowserRouter>

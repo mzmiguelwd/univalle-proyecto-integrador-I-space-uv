@@ -3,15 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { LogOut, Plus, LogIn, Loader2, AlertCircle } from "lucide-react";
 
-import { auth } from "../../../config/firebase";
-import { type UserProfile } from "../../../config/auth";
+import { auth } from "../../../config/firebase.ts";
+import { type UserProfile } from "../../../config/auth.ts";
 import {
   subscribeToOwnStudyRooms,
   getRoomById,
   type StudyRoom,
-} from "../../../config/rooms";
-import RoomCard from "./RoomCard";
-import RoomsEmptyState from "./RoomsEmptyState";
+} from "../../../config/rooms.ts";
+
+import RoomCard from "./RoomCard.tsx";
+import RoomsEmptyState from "./RoomsEmptyState.tsx";
 
 type JoinStatus = "idle" | "checking" | "not_found" | "inactive" | "error";
 
@@ -19,18 +20,19 @@ interface Props {
   profile: UserProfile | null;
 }
 
+// MAIN COMPONENT
+
 export const StudySession = ({ profile }: Props) => {
   const navigate = useNavigate();
 
-  // State
-
+  // STATE
   const [rooms, setRooms] = useState<StudyRoom[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
   const [roomIdToJoin, setRoomIdToJoin] = useState("");
   const [joinStatus, setJoinStatus] = useState<JoinStatus>("idle");
 
-  // Effects
+  // EFFECTS
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -56,7 +58,7 @@ export const StudySession = ({ profile }: Props) => {
     return () => unsubscribe();
   }, []);
 
-  // Handlers
+  // HANDLERS
 
   const handleLogout = async () => {
     try {
@@ -93,12 +95,12 @@ export const StudySession = ({ profile }: Props) => {
     }
   };
 
-  const handleRoomIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRoomIdToJoin(e.target.value);
+  const handleRoomIdChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRoomIdToJoin(event.target.value);
     if (joinStatus !== "idle") setJoinStatus("idle");
   };
 
-  // Feedback Config
+  // FEEDBACK MESSAGES
 
   const joinFeedback: Record<
     Exclude<JoinStatus, "idle" | "checking">,
@@ -115,18 +117,18 @@ export const StudySession = ({ profile }: Props) => {
     },
   };
 
-  // Render
+  // RENDER
 
   return (
     <section
       aria-label="Panel de sesión de estudio"
       className="flex-1 flex flex-col h-screen overflow-y-auto px-5 py-8 md:px-10 lg:px-14 bg-[#131313]"
     >
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">
-            ¡Hola,{" "}
+            Hola,{" "}
             <span className="text-sky-400">
               {profile?.name?.split(" ")[0] || "Usuario"}
             </span>
@@ -146,9 +148,9 @@ export const StudySession = ({ profile }: Props) => {
         </button>
       </header>
 
-      {/* ── QUICK ACTIONS (CREATE / JOIN) ── */}
+      {/* QUICK ACTIONS (CREATE / JOIN) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        {/* ACTION: Create Room (Primary Action) */}
+        {/* ACTION: CREATE ROOM (PRIMARY ACTION) */}
         <article className="rounded-2xl bg-sky-500/10 border border-sky-800/50 p-6 flex flex-col transition-all hover:border-sky-500/50 shadow-lg shadow-sky-500/5 hover:shadow-xl hover:shadow-sky-500/20">
           <div className="flex items-center gap-4 mb-5 flex-1">
             <div className="w-12 h-12 rounded-full bg-sky-500 flex items-center justify-center shrink-0 shadow-lg shadow-sky-500/30">
@@ -173,7 +175,7 @@ export const StudySession = ({ profile }: Props) => {
           </button>
         </article>
 
-        {/* ACTION: Join Room (Secondary Action) */}
+        {/* ACTION: JOIN ROOM (SECONDARY ACTION) */}
         <article className="rounded-2xl bg-[#1A1A1A] border border-gray-800 p-6 flex flex-col transition-all hover:border-gray-700">
           <div className="flex items-center gap-4 mb-5 flex-1">
             <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center shrink-0">
@@ -189,14 +191,14 @@ export const StudySession = ({ profile }: Props) => {
             </div>
           </div>
 
-          {/* ── ALIGNED INPUT ROW WITH ABSOLUTE ERROR ── */}
+          {/* ALIGNED INPUT ROW WITH ABSOLUTE ERROR */}
           <div className="relative flex items-center gap-2 w-full">
             <input
               type="text"
               placeholder="Ej. abc-123-xyz"
               value={roomIdToJoin}
               onChange={handleRoomIdChange}
-              onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
+              onKeyDown={(event) => event.key === "Enter" && handleJoinRoom()}
               disabled={joinStatus === "checking"}
               className={`flex-1 bg-[#121212] border rounded-xl px-4 py-3 text-white text-sm focus:outline-none transition-colors disabled:opacity-50 ${
                 joinStatus !== "idle" && joinStatus !== "checking"
@@ -208,7 +210,7 @@ export const StudySession = ({ profile }: Props) => {
               type="button"
               onClick={handleJoinRoom}
               disabled={!roomIdToJoin.trim() || joinStatus === "checking"}
-              className="bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:hover:bg-zinc-800 px-6 py-3 rounded-xl font-medium transition-colors flex items-center justify-center min-w-[100px]"
+              className="bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:hover:bg-zinc-800 px-6 py-3 rounded-xl font-medium transition-colors flex items-center justify-center min-w-25"
             >
               {joinStatus === "checking" ? (
                 <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
@@ -217,7 +219,7 @@ export const StudySession = ({ profile }: Props) => {
               )}
             </button>
 
-            {/* Floating Error Message */}
+            {/* FLOATING ERROR MESSAGE */}
             {joinStatus !== "idle" && joinStatus !== "checking" && (
               <p
                 className={`absolute top-full left-2 mt-0.75 text-[11px] flex items-center gap-1.5 animate-in slide-in-from-top-1 fade-in duration-200 ${joinFeedback[joinStatus].color}`}
@@ -230,7 +232,7 @@ export const StudySession = ({ profile }: Props) => {
         </article>
       </div>
 
-      {/* ── ACTIVE ROOMS GRID ── */}
+      {/* ACTIVE ROOMS GRID */}
       <section className="flex flex-col gap-5 flex-1 pb-10">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-white tracking-tight">

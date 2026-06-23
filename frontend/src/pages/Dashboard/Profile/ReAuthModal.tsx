@@ -4,8 +4,8 @@ import {
   getCurrentUserProvider,
   reauthenticateWithGoogle,
   reauthenticateWithPassword,
-} from "../../config/auth";
-import FocusTrap from "./FocusTrap";
+} from "../../../config/auth.ts";
+import FocusTrap from "./FocusTrap.tsx";
 
 type ReAuthModalProps = {
   isOpen: boolean;

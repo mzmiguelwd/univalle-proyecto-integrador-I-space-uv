@@ -6,6 +6,8 @@ import iconFeature from "../../assets/landing/icon-2.svg";
 import iconCalm from "../../assets/landing/icon-3.svg";
 import iconCommunity from "../../assets/landing/icon-4.svg";
 
+// CONSTANTS
+
 const COMMUNITY_FEATURES = [
   { icon: iconFeature, text: "Compartir pantalla instantáneo" },
   { icon: iconFeature, text: "Hilos de discusión organizados" },
@@ -13,13 +15,17 @@ const COMMUNITY_FEATURES = [
 
 const CALM_COLORS = ["bg-[#8ecdfd33]", "bg-[#d2c5af33]", "bg-[#fabb6833]"];
 
+// MAIN COMPONENT
+
 export default function HeroFeatureShowcase() {
+  // RENDER
+
   return (
     <section className="w-full flex flex-col">
       {/* ── HERO SECTION ── */}
       <div className="w-full bg-[#131313] px-6 py-20 md:px-16 md:py-32">
         <div className="mx-auto flex max-w-7xl flex-col lg:flex-row items-center justify-between gap-12">
-          {/* Hero Content */}
+          {/* HERO CONTENT */}
           <div className="flex flex-1 flex-col gap-8 w-full">
             <header>
               <h1 className="font-['Sora'] text-4xl md:text-5xl font-bold text-[#8ecdfd] leading-tight tracking-tight">
@@ -47,7 +53,7 @@ export default function HeroFeatureShowcase() {
             </Link>
           </div>
 
-          {/* Hero Image */}
+          {/* HERO IMAGE */}
           <div className="flex-1 w-full rounded-2xl overflow-hidden border border-[#40484e4c] shadow-2xl relative bg-[#ffffff01]">
             <img
               src="/students-studying.png"
@@ -55,7 +61,7 @@ export default function HeroFeatureShowcase() {
               className="h-75 w-full md:h-103 object-cover object-center"
             />
 
-            {/* Live Counter Badge (Este div se queda igual) */}
+            {/* LIVE COUNTER BADGE */}
             <div className="absolute bottom-6 left-6 inline-flex items-center gap-3 rounded bg-[#201f1fe6] px-4 py-3 border border-[#40484e] backdrop-blur-sm">
               <div
                 className="h-3 w-3 rounded-full bg-[#d2c5af] animate-pulse"
@@ -69,7 +75,7 @@ export default function HeroFeatureShowcase() {
         </div>
       </div>
 
-      {/* ── FEATURES SECTION ── */}
+      {/* FEATURES SECTION */}
       <div className="w-full bg-[#1c1b1b] px-6 py-16 md:px-16">
         <div className="mx-auto flex max-w-7xl flex-col gap-16">
           <header className="flex flex-col items-center gap-4 text-center">
@@ -81,9 +87,9 @@ export default function HeroFeatureShowcase() {
             </p>
           </header>
 
-          {/* Features Grid */}
+          {/* FeEATURES GRID*/}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Feature 1: Sync Presence */}
+            {/* FEATURE 1: SYNC PRESENCE */}
             <article className="flex flex-col justify-between rounded-lg border border-[#40484e33] bg-[#0e0e0e] p-8 lg:col-span-1">
               <div className="flex flex-col gap-4 mb-8">
                 <img
@@ -108,7 +114,7 @@ export default function HeroFeatureShowcase() {
               </div>
             </article>
 
-            {/* Feature 2: Community */}
+            {/* FEATURE 2: COMMUNITY */}
             <article className="flex flex-col md:flex-row items-center gap-8 rounded-lg border border-[#d2c5af33] bg-[#4e46351a] p-8 lg:col-span-2">
               <div className="flex w-full md:w-82.5 flex-col gap-4">
                 <img
@@ -148,7 +154,7 @@ export default function HeroFeatureShowcase() {
               </div>
             </article>
 
-            {/* Feature 3: Visual Calm */}
+            {/* FEATURE 3: VISUAL CALM */}
             <article className="flex flex-col justify-between rounded-lg border border-[#40484e33] bg-[#0e0e0e] p-8 lg:col-span-1 lg:col-start-2">
               <div className="flex flex-col gap-4 mb-8">
                 <img
@@ -178,10 +184,10 @@ export default function HeroFeatureShowcase() {
         </div>
       </div>
 
-      {/* ── FINAL CTA SECTION ── */}
+      {/* FINAL CTA SECTION */}
       <div className="w-full bg-[#131313] px-6 py-20 lg:px-48 lg:py-32">
         <div className="relative mx-auto flex max-w-4xl flex-col items-center gap-6 overflow-hidden rounded-3xl border border-[#8ecdfd33] bg-[#5797c433] p-10 md:p-24 text-center">
-          {/* Decorative Glows */}
+          {/* DECORATIVE GLOWS */}
           <div
             className="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-[#8ecdfd1a] blur-3xl"
             aria-hidden="true"

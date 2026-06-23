@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { FaInstagram, FaLinkedin, FaXTwitter } from "react-icons/fa6";
 
+// CONSTANTS
+
 const FOOTER_SECTIONS = [
   {
     title: "PRODUCTO",
@@ -26,12 +28,16 @@ const FOOTER_SECTIONS = [
   },
 ];
 
+// MAIN COMPONENT
+
 export default function Footer() {
+  // RENDER
+
   return (
     <footer className="w-full bg-[#201f1f] border-t border-[#40484e4c] px-6 py-12 md:px-16">
-      {/* Top Section */}
+      {/* TOP SECTION */}
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 md:grid-cols-4 gap-12 pb-16">
-        {/* Branding & Description */}
+        {/* BRANDING & DESCRIPTION */}
         <div className="flex flex-col gap-4">
           <h2 className="font-['Sora'] text-2xl font-bold text-[#8ecdfd]">
             Space UV
@@ -42,7 +48,7 @@ export default function Footer() {
           </p>
         </div>
 
-        {/* Footer Links Map */}
+        {/* FOOTER LINKS MAP */}
         {FOOTER_SECTIONS.map((section) => (
           <nav
             key={section.title}
@@ -55,7 +61,6 @@ export default function Footer() {
             <ul className="flex flex-col gap-4">
               {section.items.map((item) => (
                 <li key={item.label}>
-                  {/* Utilizando Link en lugar de tag <a> para navegación interna */}
                   <Link
                     to={item.href}
                     className="text-base text-[#c0c7cf] transition-colors hover:text-[#8ecdfd]"
@@ -69,13 +74,13 @@ export default function Footer() {
         ))}
       </div>
 
-      {/* Bottom Section */}
+      {/* BOTTOM SECTION */}
       <div className="mx-auto flex w-full max-w-7xl flex-col-reverse md:flex-row items-center justify-between gap-6 border-t border-[#40484e33] pt-8">
         <p className="text-center text-base text-[#c0c7cf99]">
           © {new Date().getFullYear()} Space UV. Todos los derechos reservados.
         </p>
 
-        {/* Social Links */}
+        {/* SOCIAL LINKS */}
         <div className="flex items-center gap-6">
           <a
             href="https://instagram.com"

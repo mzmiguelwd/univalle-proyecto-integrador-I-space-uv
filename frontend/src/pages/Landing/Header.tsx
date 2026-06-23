@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { LogIn } from "lucide-react";
 
+// CONSTANTS
+
 const NAV_ITEMS = [
   { label: "Inicio", path: "/", active: true },
   { label: "Explorar", path: "/explorar", active: false },
@@ -8,10 +10,14 @@ const NAV_ITEMS = [
   { label: "Comunidad", path: "/comunidad", active: false },
 ];
 
+// MAIN COMPONENT
+
 export default function Header() {
+  // RENDER
+
   return (
     <header className="fixed top-0 left-0 z-50 flex w-full items-center justify-between border-b border-[#40484e4c] bg-[#131313cc] px-6 py-4 backdrop-blur-md md:px-16">
-      {/* Brand Logo */}
+      {/* BRAND LOGO */}
       <Link
         to="/"
         aria-label="Space UV Inicio"
@@ -22,7 +28,7 @@ export default function Header() {
         </h1>
       </Link>
 
-      {/* Primary Navigation */}
+      {/* PRIMARY NAVIGATION */}
       <nav
         aria-label="Navegación Principal"
         className="hidden md:flex items-center gap-8"
@@ -43,7 +49,7 @@ export default function Header() {
         ))}
       </nav>
 
-      {/* Call to Action */}
+      {/* CALL TO ACTION */}
       <div className="flex items-center gap-6">
         <Link
           to="/login"
