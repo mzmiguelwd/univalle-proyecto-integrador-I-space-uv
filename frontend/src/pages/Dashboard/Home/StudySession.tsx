@@ -14,15 +14,37 @@ import {
 import RoomCard from "./RoomCard.tsx";
 import RoomsEmptyState from "./RoomsEmptyState.tsx";
 
+// TYPES
+
 type JoinStatus = "idle" | "checking" | "not_found" | "inactive" | "error";
 
-interface Props {
+interface StudySessionProps {
   profile: UserProfile | null;
 }
 
+// CONSTANTS
+
+const JOIN_FEEDBACK_MESSAGES: Record<
+  Exclude<JoinStatus, "idle" | "checking">,
+  { text: string; color: string }
+> = {
+  not_found: {
+    text: "No se encontró ninguna sala activa con este código.",
+    color: "text-red-400",
+  },
+  inactive: {
+    text: "Esta sala ya fue finalizada.",
+    color: "text-amber-400",
+  },
+  error: {
+    text: "Ocurrió un error de conexión. Intenta de nuevo.",
+    color: "text-red-400",
+  },
+};
+
 // MAIN COMPONENT
 
-export const StudySession = ({ profile }: Props) => {
+export default function StudySession({ profile }: Readonly<StudySessionProps>) {
   const navigate = useNavigate();
 
   // STATE
@@ -36,10 +58,13 @@ export const StudySession = ({ profile }: Props) => {
 
   useEffect(() => {
     const currentUser = auth.currentUser;
+
     if (!currentUser) {
-      setRooms([]);
-      setIsLoadingRooms(false);
-      return;
+      const timeoutId = setTimeout(() => {
+        setRooms([]);
+        setIsLoadingRooms(false);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
 
     const unsubscribe = subscribeToOwnStudyRooms(
@@ -48,8 +73,8 @@ export const StudySession = ({ profile }: Props) => {
         setRooms(updatedRooms);
         setIsLoadingRooms(false);
       },
-      (error) => {
-        console.error("Error escuchando salas:", error);
+      (error: unknown) => {
+        console.error("Error listening to study rooms:", error);
         setRooms([]);
         setIsLoadingRooms(false);
       },
@@ -64,7 +89,7 @@ export const StudySession = ({ profile }: Props) => {
     try {
       await signOut(auth);
       navigate("/login");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error al cerrar sesión:", error);
     }
   };
@@ -90,7 +115,8 @@ export const StudySession = ({ profile }: Props) => {
         return;
       }
       navigate(`/room/${id}`);
-    } catch {
+    } catch (error: unknown) {
+      console.error("Error joining room:", error);
       setJoinStatus("error");
     }
   };
@@ -100,67 +126,89 @@ export const StudySession = ({ profile }: Props) => {
     if (joinStatus !== "idle") setJoinStatus("idle");
   };
 
+  // DERIVED STATE
+
+  const firstName = profile?.name?.split(" ")[0] || "Usuario";
+  const roomCount = rooms.length;
+
   // FEEDBACK MESSAGES
 
-  const joinFeedback: Record<
-    Exclude<JoinStatus, "idle" | "checking">,
-    { text: string; color: string }
-  > = {
-    not_found: {
-      text: "No se encontró ninguna sala activa con este código.",
-      color: "text-red-400",
-    },
-    inactive: { text: "Esta sala ya fue finalizada.", color: "text-amber-400" },
-    error: {
-      text: "Ocurrió un error de conexión. Intenta de nuevo.",
-      color: "text-red-400",
-    },
-  };
+  let activeFeedback = null;
+  if (
+    joinStatus === "not_found" ||
+    joinStatus === "inactive" ||
+    joinStatus === "error"
+  ) {
+    activeFeedback = JOIN_FEEDBACK_MESSAGES[joinStatus];
+  }
+  const isErrorStatus = activeFeedback !== null;
+
+  // UI
+
+  let roomsContent;
+  if (isLoadingRooms) {
+    roomsContent = (
+      <div className="col-span-full flex items-center justify-center rounded-2xl border border-gray-800 bg-[#1A1A1A] p-8">
+        <div className="flex flex-col items-center gap-3 text-gray-400">
+          <Loader2
+            className="h-6 w-6 animate-spin text-sky-500"
+            aria-hidden="true"
+          />
+          <span className="text-sm font-medium">Cargando tu historial...</span>
+        </div>
+      </div>
+    );
+  } else if (roomCount > 0) {
+    roomsContent = rooms.map((room) => <RoomCard key={room.id} room={room} />);
+  } else {
+    roomsContent = (
+      <div className="col-span-full">
+        <RoomsEmptyState />
+      </div>
+    );
+  }
 
   // RENDER
 
   return (
     <section
       aria-label="Panel de sesión de estudio"
-      className="flex-1 flex flex-col h-screen overflow-y-auto px-5 py-8 md:px-10 lg:px-14 bg-[#131313]"
+      className="flex h-screen flex-1 flex-col overflow-y-auto bg-[#131313] px-5 py-8 md:px-10 lg:px-14"
     >
       {/* HEADER */}
-      <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <header className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">
-            Hola,{" "}
-            <span className="text-sky-400">
-              {profile?.name?.split(" ")[0] || "Usuario"}
-            </span>
-            !
+          <h1 className="text-3xl font-bold tracking-tight text-white">
+            Hola, <span className="text-sky-400">{firstName}</span>!
           </h1>
-          <p className="text-zinc-400 mt-1">
+          <p className="mt-1 text-zinc-400">
             ¿Listo para una reunión de estudio?
           </p>
         </div>
 
         <button
           onClick={handleLogout}
-          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20"
+          aria-label="Cerrar sesión"
+          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#1A1A1A] px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>Cerrar sesión</span>
         </button>
       </header>
 
       {/* QUICK ACTIONS (CREATE / JOIN) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        {/* ACTION: CREATE ROOM (PRIMARY ACTION) */}
-        <article className="rounded-2xl bg-sky-500/10 border border-sky-800/50 p-6 flex flex-col transition-all hover:border-sky-500/50 shadow-lg shadow-sky-500/5 hover:shadow-xl hover:shadow-sky-500/20">
-          <div className="flex items-center gap-4 mb-5 flex-1">
-            <div className="w-12 h-12 rounded-full bg-sky-500 flex items-center justify-center shrink-0 shadow-lg shadow-sky-500/30">
-              <Plus className="w-6 h-6 text-white" />
+      <div className="mb-10 grid grid-cols-1 gap-6 md:grid-cols-2">
+        {/* ACTION: CREATE ROOM */}
+        <article className="flex flex-col rounded-2xl border border-sky-800/50 bg-sky-500/10 p-6 shadow-lg shadow-sky-500/5 transition-all hover:border-sky-500/50 hover:shadow-xl hover:shadow-sky-500/20">
+          <div className="mb-5 flex flex-1 items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-500 shadow-lg shadow-sky-500/30">
+              <Plus className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-xl text-white truncate">
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-xl font-bold text-white">
                 Nueva reunión
               </h3>
-              <p className="text-sm text-sky-200/80 truncate">
+              <p className="truncate text-sm text-sky-200/80">
                 Crea una sala y comparte el código.
               </p>
             </div>
@@ -169,30 +217,30 @@ export const StudySession = ({ profile }: Props) => {
           <button
             type="button"
             onClick={handleCreateRoom}
-            className="w-full rounded-xl bg-sky-500 hover:bg-sky-400 text-sky-950 px-4 py-3 font-bold transition-colors shadow-md shadow-sky-500/20"
+            className="w-full rounded-xl bg-sky-500 px-4 py-3 font-bold text-sky-950 shadow-md shadow-sky-500/20 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#131313]"
           >
             Crear sala ahora
           </button>
         </article>
 
-        {/* ACTION: JOIN ROOM (SECONDARY ACTION) */}
-        <article className="rounded-2xl bg-[#1A1A1A] border border-gray-800 p-6 flex flex-col transition-all hover:border-gray-700">
-          <div className="flex items-center gap-4 mb-5 flex-1">
-            <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center shrink-0">
-              <LogIn className="w-6 h-6 text-gray-300" />
+        {/* ACTION: JOIN ROOM */}
+        <article className="flex flex-col rounded-2xl border border-gray-800 bg-[#1A1A1A] p-6 transition-all hover:border-gray-700">
+          <div className="mb-5 flex flex-1 items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-800">
+              <LogIn className="h-6 w-6 text-gray-300" aria-hidden="true" />
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-xl text-white truncate">
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-xl font-bold text-white">
                 Unirse a una reunión
               </h3>
-              <p className="text-sm text-gray-400 truncate">
+              <p className="truncate text-sm text-gray-400">
                 Ingresa el código que te compartieron.
               </p>
             </div>
           </div>
 
-          {/* ALIGNED INPUT ROW WITH ABSOLUTE ERROR */}
-          <div className="relative flex items-center gap-2 w-full">
+          {/* ALIGNED INPUT ROW */}
+          <div className="relative flex w-full items-center gap-2">
             <input
               type="text"
               placeholder="Ej. abc-123-xyz"
@@ -200,8 +248,9 @@ export const StudySession = ({ profile }: Props) => {
               onChange={handleRoomIdChange}
               onKeyDown={(event) => event.key === "Enter" && handleJoinRoom()}
               disabled={joinStatus === "checking"}
-              className={`flex-1 bg-[#121212] border rounded-xl px-4 py-3 text-white text-sm focus:outline-none transition-colors disabled:opacity-50 ${
-                joinStatus !== "idle" && joinStatus !== "checking"
+              aria-invalid={isErrorStatus}
+              className={`flex-1 rounded-xl border bg-[#121212] px-4 py-3 text-sm text-white transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
+                isErrorStatus
                   ? "border-red-500/50 focus:border-red-500/70"
                   : "border-gray-700 focus:border-sky-500"
               }`}
@@ -210,22 +259,29 @@ export const StudySession = ({ profile }: Props) => {
               type="button"
               onClick={handleJoinRoom}
               disabled={!roomIdToJoin.trim() || joinStatus === "checking"}
-              className="bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:hover:bg-zinc-800 px-6 py-3 rounded-xl font-medium transition-colors flex items-center justify-center min-w-25"
+              className="flex min-w-25 items-center justify-center rounded-xl bg-zinc-800 px-6 py-3 font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-800"
             >
               {joinStatus === "checking" ? (
-                <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
+                <Loader2
+                  className="h-5 w-5 animate-spin text-sky-400"
+                  aria-hidden="true"
+                />
               ) : (
                 "Ingresar"
               )}
             </button>
 
             {/* FLOATING ERROR MESSAGE */}
-            {joinStatus !== "idle" && joinStatus !== "checking" && (
+            {activeFeedback && (
               <p
-                className={`absolute top-full left-2 mt-0.75 text-[11px] flex items-center gap-1.5 animate-in slide-in-from-top-1 fade-in duration-200 ${joinFeedback[joinStatus].color}`}
+                aria-live="polite"
+                className={`absolute left-2 top-full mt-1.5 flex animate-in fade-in slide-in-from-top-1 items-center gap-1.5 text-[11px] duration-200 ${activeFeedback.color}`}
               >
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {joinFeedback[joinStatus].text}
+                <AlertCircle
+                  className="h-3.5 w-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+                {activeFeedback.text}
               </p>
             )}
           </div>
@@ -233,37 +289,20 @@ export const StudySession = ({ profile }: Props) => {
       </div>
 
       {/* ACTIVE ROOMS GRID */}
-      <section className="flex flex-col gap-5 flex-1 pb-10">
+      <section className="flex flex-1 flex-col gap-5 pb-10">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white tracking-tight">
+          <h2 className="text-xl font-bold tracking-tight text-white">
             Tus salas activas
           </h2>
-          {rooms.length > 0 && (
-            <span className="text-xs font-medium text-gray-400 bg-gray-800/50 px-2.5 py-1 rounded-full">
-              {rooms.length} {rooms.length === 1 ? "sala" : "salas"}
+          {roomCount > 0 && (
+            <span className="rounded-full bg-gray-800/50 px-2.5 py-1 text-xs font-medium text-gray-400">
+              {roomCount} {roomCount === 1 ? "sala" : "salas"}
             </span>
           )}
         </div>
 
-        <div className="grid w-full grid-cols-1 gap-3">
-          {isLoadingRooms ? (
-            <div className="rounded-2xl border border-gray-800 bg-[#1A1A1A] p-8 flex items-center justify-center col-span-full">
-              <div className="flex flex-col items-center gap-3 text-gray-400">
-                <Loader2 className="w-6 h-6 animate-spin text-sky-500" />
-                <span className="text-sm font-medium">
-                  Cargando tu historial...
-                </span>
-              </div>
-            </div>
-          ) : rooms.length > 0 ? (
-            rooms.map((room) => <RoomCard key={room.id} room={room} />)
-          ) : (
-            <div className="col-span-full">
-              <RoomsEmptyState />
-            </div>
-          )}
-        </div>
+        <div className="grid w-full grid-cols-1 gap-3">{roomsContent}</div>
       </section>
     </section>
   );
-};
+}

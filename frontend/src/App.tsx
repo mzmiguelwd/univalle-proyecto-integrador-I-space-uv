@@ -13,7 +13,7 @@ import ForgotPassword from "./pages/Auth/ForgotPassword.tsx";
 import AuthLoadingScreen from "./pages/Auth/AuthLoadingScreen.tsx";
 import Dashboard from "./pages/Dashboard/Dashboard.tsx";
 import Profile from "./pages/Dashboard/Profile/Profile.tsx";
-import CreateRoom from "./pages/Dashboard/Home/CreateRoom.tsx";
+import CreateRoom from "./pages/Dashboard/CreateRoom/CreateRoom.tsx";
 import Room from "./pages/Room/Room.tsx";
 
 // MAIN COMPONENT
