@@ -18,11 +18,60 @@ import {
   updateDoc,
   getDoc,
   writeBatch,
+  FieldValue,
 } from "firebase/firestore";
 
 import { auth, db } from "./firebase.ts";
 
+// CONFIGURATION & INSTANCES
+
 const googleProvider = new GoogleAuthProvider();
+
+const normalizeUsername = (username: string): string => {
+  return username.trim().toLowerCase();
+};
+
+// INTERFACES
+
+export interface UserProfile {
+  uid: string;
+  name: string;
+  email: string;
+  username?: string;
+  originalUsername?: string;
+  avatar?: string | null;
+  avatarType?: "emoji" | "google";
+  provider?: string;
+  createdAt?: FieldValue;
+  lastLogin?: FieldValue;
+  updatedAt?: FieldValue;
+  university?: string;
+  program?: string;
+}
+
+export interface UpdateUserProfileData {
+  name: string;
+  username: string;
+  university?: string;
+  program?: string;
+  avatar?: string;
+  avatarType?: "emoji" | "google";
+}
+
+// ERROR HANDLING
+
+export class ValidationError extends Error {
+  public readonly type = "validation" as const;
+  public errors: Partial<Record<keyof UpdateUserProfileData, string>>;
+
+  constructor(errors: Partial<Record<keyof UpdateUserProfileData, string>>) {
+    super("Error de validación en el perfil.");
+    this.name = "ValidationError";
+    this.errors = errors;
+  }
+}
+
+// AUTHENTICATION FUNCTIONS
 
 export const registerWithEmail = async (
   email: string,
@@ -36,10 +85,8 @@ export const registerWithEmail = async (
     email,
     password,
   );
-  const user = userCredential.user;
-
+  const { user } = userCredential;
   const normalizedUsername = normalizeUsername(username);
-
   const batch = writeBatch(db);
 
   batch.set(doc(db, "users", user.uid), {
@@ -52,7 +99,6 @@ export const registerWithEmail = async (
     avatarType: "emoji",
     createdAt: serverTimestamp(),
     lastLogin: serverTimestamp(),
-    role: "student",
     provider: "email",
   });
 
@@ -63,7 +109,6 @@ export const registerWithEmail = async (
   });
 
   await batch.commit();
-
   return user;
 };
 
@@ -76,15 +121,20 @@ export const loginWithEmail = async (email: string, password: string) => {
   return userCredential.user;
 };
 
-// ── guarda photoURL de Google como avatar ─────────────
 export const loginWithGoogle = async () => {
   const userCredential = await signInWithPopup(auth, googleProvider);
-  const user = userCredential.user;
+  const { user } = userCredential;
   const userRef = doc(db, "users", user.uid);
   const userDoc = await getDoc(userRef);
 
-  if (!userDoc.exists()) {
-    // Usuario nuevo — sin username todavía (va a SetupProfile)
+  if (userDoc.exists()) {
+    // Existing user: Updated the photo in case it changed in the Google account
+    await updateDoc(userRef, {
+      avatar: user.photoURL || (userDoc.data() as UserProfile).avatar,
+      lastLogin: serverTimestamp(),
+    });
+  } else {
+    // New user: No username yet (redirects to SetupProfile)
     await setDoc(userRef, {
       uid: user.uid,
       name: user.displayName || "Usuario de Google",
@@ -93,15 +143,8 @@ export const loginWithGoogle = async () => {
       avatarType: "google",
       createdAt: serverTimestamp(),
       lastLogin: serverTimestamp(),
-      role: "student",
       provider: "google",
     });
-  } else {
-    // Usuario existente — actualizamos foto por si la cambió en Google
-    await updateDoc(userRef, {
-      avatar: user.photoURL || userDoc.data().avatar,
-      lastLogin: serverTimestamp(),
-    }).catch(console.error);
   }
 
   return user;
@@ -111,13 +154,16 @@ export const logoutUser = async () => {
   await signOut(auth);
 };
 
-const normalizeUsername = (username: string) => {
-  return username.trim().toLowerCase();
+export const resetPassword = async (email: string) => {
+  await sendPasswordResetEmail(auth, email);
 };
 
-export const checkUsernameAvailability = async (username: string) => {
-  const normalizedUsername = normalizeUsername(username);
+// USERNAME MANAGEMENT
 
+export const checkUsernameAvailability = async (
+  username: string,
+): Promise<boolean> => {
+  const normalizedUsername = normalizeUsername(username);
   if (!normalizedUsername) return false;
 
   const usernameRef = doc(db, "usernames", normalizedUsername);
@@ -128,13 +174,11 @@ export const checkUsernameAvailability = async (username: string) => {
 
 export const saveUsername = async (uid: string, username: string) => {
   const normalizedUsername = normalizeUsername(username);
-
   if (!normalizedUsername) {
     throw new Error("El nombre de usuario no es válido.");
   }
 
   const batch = writeBatch(db);
-
   const userRef = doc(db, "users", uid);
   const usernameRef = doc(db, "usernames", normalizedUsername);
 
@@ -156,124 +200,48 @@ export const saveUsername = async (uid: string, username: string) => {
   await batch.commit();
 };
 
-export const resetPassword = async (email: string) => {
-  await sendPasswordResetEmail(auth, email);
-};
-
-export type UserProfile = {
-  uid: string;
-  name: string;
-  email: string;
-  username?: string;
-  originalUsername?: string;
-  avatar?: string | null;
-  avatarType?: "emoji" | "google";
-  bio?: string;
-  studyArea?: string;
-  role?: string;
-  provider?: string;
-  createdAt?: unknown;
-  lastLogin?: unknown;
-  updatedAt?: unknown;
-  university?: string;
-  program?: string;
-  interests?: string;
-  availability?: string;
-  notificationsEnabled?: boolean;
-  studyMode?: string;
-  visibleStatus?: boolean;
-  dailyGoalHours?: number;
-};
-
-export type UpdateUserProfileData = {
-  name: string;
-  username: string;
-  bio?: string;
-  studyArea?: string;
-  university?: string;
-  program?: string;
-  interests?: string;
-  availability?: string;
-  notificationsEnabled?: boolean;
-  studyMode?: string;
-  visibleStatus?: boolean;
-  dailyGoalHours?: number;
-  avatar?: string;
-  avatarType?: "emoji" | "google";
-};
+// PROFILE SERVICES & VALIDATIONS
 
 export const validateUserProfile = (data: UpdateUserProfileData) => {
   const errors: Partial<Record<keyof UpdateUserProfileData, string>> = {};
 
   const name = data.name.trim();
   const username = data.username.trim();
-  const bio = data.bio?.trim() || "";
-  const studyArea = data.studyArea?.trim() || "";
-  const university = data.university?.trim() || "";
-  const program = data.program?.trim() || "";
-  const interests = data.interests?.trim() || "";
-  const availability = data.availability?.trim() || "";
-  const studyMode = data.studyMode?.trim() || "";
+  const university = data.university?.trim() ?? "";
+  const program = data.program?.trim() ?? "";
 
-  if (university.length > 80) {
+  if (university.length > 80)
     errors.university = "La universidad no puede superar los 80 caracteres.";
-  }
-  if (program.length > 80) {
+  if (program.length > 80)
     errors.program = "El programa no puede superar los 80 caracteres.";
-  }
-  if (interests.length > 160) {
-    errors.interests = "Los intereses no pueden superar los 160 caracteres.";
-  }
-  if (availability.length > 80) {
-    errors.availability = "La disponibilidad no puede superar los 80 caracteres.";
-  }
-  if (studyMode.length > 40) {
-    errors.studyMode = "El modo de estudio no puede superar los 40 caracteres.";
-  }
-  if (
-    data.dailyGoalHours !== undefined &&
-    (Number.isNaN(data.dailyGoalHours) ||
-      data.dailyGoalHours < 1 ||
-      data.dailyGoalHours > 24)
-  ) {
-    errors.dailyGoalHours = "La meta diaria debe estar entre 1 y 24 horas.";
-  }
-  if (name.length < 2) {
+
+  if (name.length < 2)
     errors.name = "El nombre debe tener al menos 2 caracteres.";
-  }
-  if (name.length > 60) {
+  if (name.length > 60)
     errors.name = "El nombre no puede superar los 60 caracteres.";
-  }
-  if (username.length < 3) {
+  if (username.length < 3)
     errors.username = "El usuario debe tener al menos 3 caracteres.";
-  }
-  if (username.length > 20) {
+  if (username.length > 20)
     errors.username = "El usuario no puede superar los 20 caracteres.";
-  }
   if (!/^[a-zA-Z0-9._]+$/.test(username)) {
     errors.username =
       "El usuario solo puede contener letras, números, puntos y guiones bajos.";
-  }
-  if (bio.length > 160) {
-    errors.bio = "La biografía no puede superar los 160 caracteres.";
-  }
-  if (studyArea.length > 80) {
-    errors.studyArea = "El área de estudio no puede superar los 80 caracteres.";
   }
 
   return errors;
 };
 
-export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+export const getUserProfile = async (
+  uid: string,
+): Promise<UserProfile | null> => {
   const userRef = doc(db, "users", uid);
   const userSnap = await getDoc(userRef);
   if (!userSnap.exists()) return null;
 
-  const data = userSnap.data();
   return {
     uid,
-    ...(data as Omit<UserProfile, "uid">),
-  };
+    ...userSnap.data(),
+  } as UserProfile;
 };
 
 export const updateUserProfile = async (
@@ -283,7 +251,7 @@ export const updateUserProfile = async (
   const errors = validateUserProfile(data);
 
   if (Object.keys(errors).length > 0) {
-    throw { type: "validation", errors };
+    throw new ValidationError(errors);
   }
 
   const lowerCaseUsername = normalizeUsername(data.username);
@@ -293,37 +261,28 @@ export const updateUserProfile = async (
     throw new Error("No se encontró el perfil del usuario.");
   }
 
-  const previousUsername = normalizeUsername(currentProfile.username || "");
+  const previousUsername = normalizeUsername(currentProfile.username ?? "");
+  const hasUsernameChanged = previousUsername !== lowerCaseUsername;
 
-  if (previousUsername !== lowerCaseUsername) {
+  if (hasUsernameChanged) {
     const isAvailable = await checkUsernameAvailability(lowerCaseUsername);
     if (!isAvailable) {
-      throw {
-        type: "validation",
-        errors: { username: "Este nombre de usuario ya está en uso." },
-      };
+      throw new ValidationError({
+        username: "Este nombre de usuario ya está en uso.",
+      });
     }
   }
 
   const batch = writeBatch(db);
   const userRef = doc(db, "users", uid);
   const newUsernameRef = doc(db, "usernames", lowerCaseUsername);
-  const newUsernameSnap = await getDoc(newUsernameRef);
 
   const updateData: Record<string, unknown> = {
     name: data.name.trim(),
     username: lowerCaseUsername,
     originalUsername: data.username.trim(),
-    bio: data.bio?.trim() || "",
-    studyArea: data.studyArea?.trim() || "",
-    university: data.university?.trim() || "",
-    program: data.program?.trim() || "",
-    interests: data.interests?.trim() || "",
-    availability: data.availability?.trim() || "",
-    notificationsEnabled: data.notificationsEnabled ?? true,
-    studyMode: data.studyMode?.trim() || "Deep Work",
-    visibleStatus: data.visibleStatus ?? true,
-    dailyGoalHours: data.dailyGoalHours ?? 6,
+    university: data.university?.trim() ?? "",
+    program: data.program?.trim() ?? "",
     updatedAt: serverTimestamp(),
   };
 
@@ -332,27 +291,26 @@ export const updateUserProfile = async (
 
   batch.update(userRef, updateData);
 
-  if (previousUsername !== lowerCaseUsername) {
+  // Management of unique username indexes based on batch transactions
+  if (hasUsernameChanged) {
     if (previousUsername) {
-      const previousUsernameRef = doc(db, "usernames", previousUsername);
-      const previousUsernameSnap = await getDoc(previousUsernameRef);
-      if (previousUsernameSnap.exists()) {
-        batch.delete(previousUsernameRef);
-      }
+      batch.delete(doc(db, "usernames", previousUsername));
     }
     batch.set(newUsernameRef, {
       uid,
       username: lowerCaseUsername,
       createdAt: serverTimestamp(),
     });
-  }
-
-  if (previousUsername === lowerCaseUsername && !newUsernameSnap.exists()) {
-    batch.set(newUsernameRef, {
-      uid,
-      username: lowerCaseUsername,
-      createdAt: serverTimestamp(),
-    });
+  } else {
+    // A safeguard in case the index did not previously exist due to a corrupted record
+    const currentUsernameSnap = await getDoc(newUsernameRef);
+    if (!currentUsernameSnap.exists()) {
+      batch.set(newUsernameRef, {
+        uid,
+        username: lowerCaseUsername,
+        createdAt: serverTimestamp(),
+      });
+    }
   }
 
   await batch.commit();
@@ -365,13 +323,12 @@ export const updateUserProfile = async (
 export const deleteUserAccount = async (uid: string) => {
   const currentUser = auth.currentUser;
 
-  if (!currentUser || currentUser.uid !== uid) {
+  if (currentUser?.uid !== uid) {
     throw new Error("No hay una sesión válida para eliminar esta cuenta.");
   }
 
   const currentProfile = await getUserProfile(uid);
-  const currentUsername = normalizeUsername(currentProfile?.username || "");
-
+  const currentUsername = normalizeUsername(currentProfile?.username ?? "");
   const batch = writeBatch(db);
 
   batch.delete(doc(db, "users", uid));
@@ -384,10 +341,11 @@ export const deleteUserAccount = async (uid: string) => {
   await deleteUser(currentUser);
 };
 
+// REAUTHENTICATION HELPERS
+
 export const reauthenticateWithPassword = async (password: string) => {
   const currentUser = auth.currentUser;
-
-  if (!currentUser || !currentUser.email) {
+  if (!currentUser?.email) {
     throw new Error("No hay una sesión válida para reautenticar.");
   }
 
@@ -397,16 +355,14 @@ export const reauthenticateWithPassword = async (password: string) => {
 
 export const reauthenticateWithGoogle = async () => {
   const currentUser = auth.currentUser;
-
   if (!currentUser) {
     throw new Error("No hay una sesión válida para reautenticar.");
   }
 
-  const provider = new GoogleAuthProvider();
-  await reauthenticateWithPopup(currentUser, provider);
+  await reauthenticateWithPopup(currentUser, googleProvider);
 };
 
-export const getCurrentUserProvider = () => {
+export const getCurrentUserProvider = (): string | null => {
   const currentUser = auth.currentUser;
   if (!currentUser) return null;
 
@@ -415,5 +371,5 @@ export const getCurrentUserProvider = () => {
   if (providerId === "google.com") return "google";
   if (providerId === "password") return "email";
 
-  return providerId || null;
+  return providerId ?? null;
 };

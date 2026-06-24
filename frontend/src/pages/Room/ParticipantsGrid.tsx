@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import { VideoOff, MicOff, Pin } from "lucide-react";
 
-// Types & Interfaces
+// INTERFACES
 
 export interface Participant {
   id: string;
@@ -34,7 +34,7 @@ export interface ParticipantsGridProps {
   onPinUser: (id: string) => void;
 }
 
-// Constants & Helpers
+// CONSTANTS
 
 const AVATARS: Record<string, string> = {
   owl: "🦉",
@@ -51,6 +51,8 @@ const AVATARS: Record<string, string> = {
   compass: "🧭",
 };
 
+// HELPERS
+
 /**
  * Calculates the grid layout columns based on the total number of users.
  */
@@ -60,7 +62,13 @@ function getGridCols(totalParticipants: number): string {
   return "grid-cols-3";
 }
 
-// Sub-components
+// SUB-COMPONENTS
+
+interface ParticipantAvatarProps {
+  name: string;
+  avatar?: string | null;
+  sizeClass?: string; // Changed from 'size' to 'sizeClass' to support Tailwind's compiler
+}
 
 /**
  * Renders the user's avatar based on their profile settings (URL, Emoji, or Initial).
@@ -68,35 +76,38 @@ function getGridCols(totalParticipants: number): string {
 function ParticipantAvatar({
   name,
   avatar,
-  size = 13,
-}: {
-  name: string;
-  avatar?: string | null;
-  size?: number;
-}) {
-  const cls = `h-${size} w-${size} rounded-full object-cover`;
+  sizeClass = "h-13 w-13",
+}: Readonly<ParticipantAvatarProps>) {
+  const baseClasses = `${sizeClass} rounded-full shrink-0 flex items-center justify-center`;
 
-  if (avatar && avatar.startsWith("http")) {
-    return <img src={avatar} alt={name} className={cls} />;
+  if (avatar?.startsWith("http")) {
+    return (
+      <img
+        src={avatar}
+        alt={`Avatar de ${name}`}
+        className={`${baseClasses} object-cover`}
+      />
+    );
   }
 
   if (avatar && AVATARS[avatar]) {
     return (
-      <div
-        className={`h-${size} w-${size} rounded-full bg-slate-700 flex items-center justify-center text-2xl shrink-0`}
-      >
+      <div className={`${baseClasses} bg-slate-700 text-2xl`}>
         {AVATARS[avatar]}
       </div>
     );
   }
 
   return (
-    <div
-      className={`h-${size} w-${size} rounded-full bg-sky-700 flex items-center justify-center font-bold text-white text-base shrink-0`}
-    >
+    <div className={`${baseClasses} bg-sky-700 text-base font-bold text-white`}>
       {name.charAt(0).toUpperCase()}
     </div>
   );
+}
+
+interface RemoteVideoCardProps {
+  stream: MediaStream;
+  participant: Participant;
 }
 
 /**
@@ -105,10 +116,7 @@ function ParticipantAvatar({
 function RemoteVideoCard({
   stream,
   participant,
-}: {
-  stream: MediaStream;
-  participant: Participant;
-}) {
+}: Readonly<RemoteVideoCardProps>) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -118,31 +126,38 @@ function RemoteVideoCard({
   }, [stream]);
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div className="relative h-full w-full bg-black">
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="w-full h-full object-cover rounded-xl"
-      >
-        <track kind="captions" label="Captions" />
-      </video>
+        className="h-full w-full rounded-xl object-cover"
+      />
 
-      {/* Name Tag */}
-      <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 truncate max-w-[80%]">
+      {/* NAME TAG */}
+      <div className="absolute bottom-1.5 left-2 max-w-[80%] truncate rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-gray-200">
         {participant.name.split(" ")[0]}
       </div>
 
-      {/* Status Icons */}
+      {/* STATUS ICON */}
       <div className="absolute bottom-1.5 right-2 flex gap-1">
         {participant.micOn === false && (
-          <div className="bg-red-600/90 rounded-full p-0.5">
-            <MicOff className="w-3 h-3 text-white" />
+          <div className="rounded-full bg-red-600/90 p-0.5">
+            <MicOff className="h-3 w-3 text-white" aria-hidden="true" />
           </div>
         )}
       </div>
     </div>
   );
+}
+
+interface AvatarCardProps {
+  name: string;
+  avatar?: string | null;
+  isYou?: boolean;
+  micOn?: boolean;
+  statusText?: string;
 }
 
 /**
@@ -154,28 +169,22 @@ function AvatarCard({
   isYou = false,
   micOn = true,
   statusText,
-}: {
-  name: string;
-  avatar?: string | null;
-  isYou?: boolean;
-  micOn?: boolean;
-  statusText?: string;
-}) {
+}: Readonly<AvatarCardProps>) {
   return (
-    <div className="w-full h-full flex flex-col justify-between gap-3 px-4 py-3 bg-[#111827] rounded-xl">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <ParticipantAvatar name={name} avatar={avatar} size={11} />
-        <div className="min-w-0 flex flex-col">
-          <p className="text-xs font-semibold text-white leading-tight truncate">
+    <div className="flex h-full w-full flex-col justify-between gap-3 rounded-xl bg-[#111827] px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <ParticipantAvatar name={name} avatar={avatar} sizeClass="h-11 w-11" />
+        <div className="flex min-w-0 flex-col">
+          <p className="truncate text-xs font-semibold leading-tight text-white">
             {name.split(" ")[0]}
             {isYou && (
               <span className="ml-1 text-[9px] text-sky-400">(tú)</span>
             )}
           </p>
-          <div className="text-[10px] text-gray-400 mt-0.5">
+          <div className="mt-0.5 text-[10px] text-gray-400">
             {statusText || (
               <span className="inline-flex items-center gap-1">
-                <VideoOff className="w-3 h-3" aria-hidden="true" />
+                <VideoOff className="h-3 w-3" aria-hidden="true" />
                 Cámara apagada
               </span>
             )}
@@ -184,9 +193,9 @@ function AvatarCard({
       </div>
 
       {!micOn && (
-        <div className="bg-red-600/90 rounded-full p-0.5 shrink-0">
+        <div className="shrink-0 self-end rounded-full bg-red-600/90 p-0.5">
           <MicOff
-            className="w-3.5 h-3.5 text-white"
+            className="h-3.5 w-3.5 text-white"
             aria-label="Micrófono apagado"
           />
         </div>
@@ -195,7 +204,7 @@ function AvatarCard({
   );
 }
 
-// Main Component
+// MAIN COMPONENT
 
 /**
  * Displays a dynamic grid of all participants in the room.
@@ -212,7 +221,7 @@ export default function ParticipantsGrid({
   remoteTracksUpdate,
   pinnedUserId,
   onPinUser,
-}: ParticipantsGridProps) {
+}: Readonly<ParticipantsGridProps>) {
   const total = participants.length + 1; // +1 includes the local user
   const isSingleParticipant = total === 1;
 
@@ -223,73 +232,81 @@ export default function ParticipantsGrid({
     participants.forEach((participant) => {
       const streamKey = participant.peerId || participant.id;
       const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
-      states[streamKey] = !!(
-        remoteVideo &&
-        remoteVideo.stream
-          .getVideoTracks()
-          .some((track) => track.readyState === "live" && track.enabled)
-      );
+
+      states[streamKey] = !!remoteVideo?.stream
+        .getVideoTracks()
+        .some((track) => track.readyState === "live" && track.enabled);
     });
     return states;
+    // We intentionally include remoteTracksUpdate to force re-evaluation
+    // when mutable MediaStream tracks change state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participants, remoteStreams, remoteTracksUpdate]);
 
   // Base classes for video cards (handling the "Pin" interactive state)
-  const baseCardStyles = `rounded-xl overflow-hidden relative border transition-all duration-200 cursor-pointer hover:border-sky-500/80 shadow-sm`;
+  const baseCardStyles = `relative overflow-hidden rounded-xl border shadow-sm transition-all duration-200 cursor-pointer hover:border-sky-500/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`;
   const getPinStyles = (isPinned: boolean) =>
     isPinned
-      ? "border-sky-500 ring-2 ring-sky-500/50 scale-[0.98]"
+      ? "border-sky-500 scale-[0.98] ring-2 ring-sky-500/50"
       : "border-gray-800 bg-[#1E1E1E]";
 
-  const cardSizeClass = isPresenterMode
-    ? "h-20"
-    : isSingleParticipant
-      ? "h-36"
-      : "aspect-video";
+  let cardSizeClass = "aspect-video";
+  let cardMinHeight = 72;
 
-  const cardMinHeight = isPresenterMode ? 80 : isSingleParticipant ? 144 : 72;
+  if (isPresenterMode) {
+    cardSizeClass = "h-20";
+    cardMinHeight = 80;
+  } else if (isSingleParticipant) {
+    cardSizeClass = "h-36";
+    cardMinHeight = 144;
+  }
 
   return (
-    <div className="shrink-0 flex flex-col">
-      {/* ── Room Stats ── */}
-      <div className="flex items-center justify-between text-xs text-gray-400 mb-2 px-1">
+    <div className="flex shrink-0 flex-col">
+      {/*  ROOM STATS */}
+      <div className="mb-2 flex items-center justify-between px-1 text-xs text-gray-400">
         <p>
-          {total} Participante{total !== 1 ? "s" : ""}
+          {total} Participante{total === 1 ? "" : "s"}
         </p>
 
         {pinnedUserId && (
-          <span className="text-[10px] text-sky-400 bg-sky-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <Pin className="w-3 h-3" /> Fijado
+          <span className="flex items-center gap-1 rounded-full bg-sky-900/30 px-2 py-0.5 text-[10px] text-sky-400">
+            <Pin className="h-3 w-3" aria-hidden="true" /> Fijado
           </span>
         )}
       </div>
 
-      {/* ── Dynamic Grid ── */}
+      {/* DYNAMIC GRID */}
       <div
-        className={`grid ${
-          isPresenterMode ? "grid-cols-2" : getGridCols(total)
-        } gap-2 overflow-y-auto pr-1 custom-scrollbar ${
-          isPresenterMode ? "max-h-40" : "max-h-56"
+        className={`custom-scrollbar grid gap-2 overflow-y-auto pr-1 ${
+          isPresenterMode
+            ? "grid-cols-2 max-h-40"
+            : `${getGridCols(total)} max-h-56`
         }`}
       >
-        {/* 1. LOCAL USER CARD */}
-        <div
+        {/* LOCAL USER CARD */}
+        <button
+          type="button"
           onClick={() => onPinUser("local")}
-          className={`${baseCardStyles} ${getPinStyles(pinnedUserId === "local")} ${cardSizeClass}`}
+          className={`block w-full text-left ${baseCardStyles} ${getPinStyles(pinnedUserId === "local")} ${cardSizeClass}`}
           style={{ minHeight: cardMinHeight }}
-          role="button"
-          tabIndex={0}
-          aria-label="Fijar mi video"
+          aria-label={
+            pinnedUserId === "local" ? "Desfijar mi video" : "Fijar mi video"
+          }
         >
-          {/* Active Local Video */}
+          {/* ACTIVE LOCAL VIDEO */}
+          {}
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover transform scale-x-[-1] rounded-xl ${!isCameraOn ? "hidden" : ""}`}
+            className={`h-full w-full scale-x-[-1] transform rounded-xl object-cover ${
+              isCameraOn ? "" : "hidden"
+            }`}
           />
 
-          {/* Inactive Local Video (Avatar) */}
+          {/* INACTIVE LOCAL VIDEO (AVATAR) */}
           {!isCameraOn && (
             <AvatarCard
               name={profile.name || "Tú"}
@@ -299,43 +316,48 @@ export default function ParticipantsGrid({
             />
           )}
 
-          {/* Floating Badges for Active Video */}
+          {/* FLOATING BADGES FOR ACTIVE VIDEO */}
           {isCameraOn && (
             <>
-              <div className="absolute top-1.5 left-2 bg-sky-600/80 text-[9px] font-semibold px-1.5 py-0.5 rounded text-white shadow-sm">
+              <div className="absolute left-2 top-1.5 rounded bg-sky-600/80 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm">
                 Tú
               </div>
               {!isMicrophoneOn && (
-                <div className="absolute bottom-1.5 right-2 bg-red-600/90 rounded-full p-0.5 shadow-sm">
+                <div className="absolute bottom-1.5 right-2 rounded-full bg-red-600/90 p-0.5 shadow-sm">
                   <MicOff
-                    className="w-3 h-3 text-white"
+                    className="h-3 w-3 text-white"
                     aria-label="Micrófono apagado"
                   />
                 </div>
               )}
-              <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 shadow-sm truncate max-w-[70%]">
+              <div className="absolute bottom-1.5 left-2 max-w-[70%] truncate rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-gray-200 shadow-sm">
                 {profile.name?.split(" ")[0] || "Tú"}
               </div>
             </>
           )}
-        </div>
+        </button>
 
-        {/* 2. REMOTE PARTICIPANTS CARDS */}
+        {/* REMOTE PARTICIPANTS CARDS */}
         {participants.map((participant) => {
           // Resolve the correct ID used for streaming (PeerJS ID)
           const streamKey = participant.peerId || participant.id;
-          const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
+          const remoteVideo = remoteStreams.find(
+            (stream) => stream.id === streamKey,
+          );
           const hasActiveVideo = remoteVideoStates[streamKey] || false;
 
           return (
-            <div
+            <button
               key={participant.id}
+              type="button"
               onClick={() => onPinUser(streamKey)}
-              className={`${baseCardStyles} ${getPinStyles(pinnedUserId === streamKey)} ${cardSizeClass}`}
+              className={`block w-full text-left ${baseCardStyles} ${getPinStyles(pinnedUserId === streamKey)} ${cardSizeClass}`}
               style={{ minHeight: cardMinHeight }}
-              role="button"
-              tabIndex={0}
-              aria-label={`Fijar video de ${participant.name}`}
+              aria-label={
+                pinnedUserId === streamKey
+                  ? `Desfijar video de ${participant.name}`
+                  : `Fijar video de ${participant.name}`
+              }
             >
               {hasActiveVideo && remoteVideo ? (
                 <RemoteVideoCard
@@ -350,7 +372,7 @@ export default function ParticipantsGrid({
                   statusText="Conectando..."
                 />
               )}
-            </div>
+            </button>
           );
         })}
       </div>
