@@ -128,7 +128,7 @@ export default function StudySession({ profile }: Readonly<StudySessionProps>) {
 
   // DERIVED STATE
 
-  const firstName = profile?.name?.split(" ")[0] || "Usuario";
+  const username = profile?.username?.split(" ")[0] || "Usuario";
   const roomCount = rooms.length;
 
   // FEEDBACK MESSAGES
@@ -179,7 +179,7 @@ export default function StudySession({ profile }: Readonly<StudySessionProps>) {
       <header className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">
-            Hola, <span className="text-sky-400">{firstName}</span>!
+            Hola, <span className="text-sky-400">{username}</span>!
           </h1>
           <p className="mt-1 text-zinc-400">
             ¿Listo para una reunión de estudio?
