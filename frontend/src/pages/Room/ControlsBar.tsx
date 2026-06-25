@@ -81,6 +81,9 @@ export default function ControlsBar({
       {/* LEFT: ROOM INFO*/}
       <div className="flex flex-1 items-center justify-start gap-4">
         <div className="hidden items-center gap-3 rounded-lg border border-gray-700 bg-[#1A1A1A] px-3 py-1.5 transition-colors hover:border-gray-600 sm:flex">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            ID de la sala
+          </span>
           <span className="font-mono text-sm tracking-wide text-sky-300 select-all">
             {roomId}
           </span>

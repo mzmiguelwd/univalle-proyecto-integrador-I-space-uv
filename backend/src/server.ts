@@ -1,6 +1,6 @@
 import express, { Application } from "express";
 import http from "http";
-import { Server, Socket } from "socket.io";
+import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 import { ExpressPeerServer } from "peer";
@@ -8,6 +8,69 @@ import { ExpressPeerServer } from "peer";
 import setupSwagger from "./docs/swaggerConfig";
 
 dotenv.config();
+
+// INTERFACES
+
+export interface UserMediaState {
+  micOn: boolean;
+  camOn: boolean;
+  isScreenSharing: boolean;
+}
+
+export interface UserPayload {
+  name: string;
+  avatar: string | null;
+  peerId: string;
+}
+
+export interface SocketData extends UserPayload, UserMediaState {
+  roomId: string;
+}
+
+export interface ServerToClientEvents {
+  "user-connected": (
+    payload: UserPayload & { socketId: string } & UserMediaState,
+  ) => void;
+  "user-disconnected": (socketId: string, peerId: string) => void;
+  "room-users": (
+    users: (UserPayload & { socketId: string } & UserMediaState)[],
+  ) => void;
+  "media-state": (payload: {
+    socketId: string;
+    micOn: boolean;
+    camOn: boolean;
+  }) => void;
+  "screen-share-started": (payload: { socketId: string }) => void;
+  "screen-share-stopped": (payload: { socketId: string }) => void;
+  "camera-stopped": (payload: { socketId: string }) => void;
+  "room-ended": () => void;
+
+  // Manual WebRTC Signaling (If bypassing PeerJS for specific streams)
+  "webrtc-offer": (payload: { offer: any; from: string }) => void;
+  "webrtc-answer": (payload: { answer: any; from: string }) => void;
+  "webrtc-ice-candidate": (payload: { candidate: any; from: string }) => void;
+}
+
+export interface ClientToServerEvents {
+  "join-room": (payload: { roomId: string; user: UserPayload }) => void;
+  "request-presence": (payload: { roomId: string }) => void;
+  "media-state": (payload: {
+    roomId: string;
+    micOn: boolean;
+    camOn: boolean;
+  }) => void;
+  "screen-share-started": (payload: { roomId: string }) => void;
+  "screen-share-stopped": (payload: { roomId: string }) => void;
+  "camera-stopped": (payload: { roomId: string }) => void;
+  "end-room": (payload: { roomId: string }) => void;
+
+  // Manual WebRTC Signaling
+  "webrtc-offer": (payload: { offer: any; to: string }) => void;
+  "webrtc-answer": (payload: { answer: any; to: string }) => void;
+  "webrtc-ice-candidate": (payload: { candidate: any; to: string }) => void;
+}
+
+// CONFIGURATION
 
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
@@ -20,11 +83,15 @@ const cleanClientUrl = rawClientUrl.endsWith("/")
 const allowedOrigins = ["http://localhost:5173"];
 if (cleanClientUrl) allowedOrigins.push(cleanClientUrl);
 
-const corsOptions = {
-  origin: (origin: string | undefined, callback: any) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    console.warn(`CORS request blocked from origin: ${origin}`);
+const corsOptions: cors.CorsOptions = {
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`[CORS] Request blocked from origin: ${origin}`);
     callback(new Error("CORS not allowed"), false);
   },
   methods: ["GET", "POST"],
@@ -33,16 +100,28 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Health check endpoint
 app.get("/health", (_req, res) => res.send({ status: "ok" }));
+
+// Docs endpoint
 setupSwagger(app, PORT);
 
-// Initialize HTTP server and WebSocket server
+// SERVER INITIALIZATION
+
 const server = http.createServer(app);
-const io = new Server(server, {
+
+const io = new Server<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  never,
+  SocketData
+>(server, {
   cors: corsOptions,
   transports: ["websocket", "polling"],
 });
 
+// PeerJS Server Initialization
 const peerServer = ExpressPeerServer(server, {
   path: "/",
   allow_discovery: true,
@@ -51,143 +130,150 @@ const peerServer = ExpressPeerServer(server, {
 app.use("/peerjs", peerServer);
 
 peerServer.on("connection", (client) => {
-  console.log(`PeerJS: Cliente conectado con PeerID: ${client.getId()}`);
+  console.log(`[PeerJS] Client connected - PeerID: ${client.getId()}`);
 });
 
 peerServer.on("disconnect", (client) => {
-  console.log(`PeerJS: Cliente desconectado: ${client.getId()}`);
+  console.log(`[PeerJS] Client disconnected - PeerID: ${client.getId()}`);
 });
 
-// Listening for WebSocket connections (Socket.IO)
-io.on("connection", (socket: Socket) => {
-  console.log(`Usuario conectado (Socket.IO): ${socket.id}`);
+// SOCKET.IO HANDLERS
 
+io.on("connection", (socket) => {
+  console.log(`[Socket] User connected: ${socket.id}`);
+
+  // Join Room & State Initialization
   socket.on("join-room", async ({ roomId, user }) => {
-    console.log("join-room payload:", { socketId: socket.id, roomId, user });
     socket.join(roomId);
+
+    // Initialize default media state for the new user
+    socket.data = {
+      roomId,
+      ...user,
+      micOn: true,
+      camOn: true,
+      isScreenSharing: false,
+    };
+
     console.log(
-      `Socket ${socket.id} se unió a la sala ${roomId} con PeerID: ${user.peerId}`,
+      `[Socket] ${socket.id} joined room ${roomId} (PeerID: ${user.peerId})`,
     );
 
-    socket.data.roomId = roomId;
-    socket.data.peerId = user.peerId;
-    socket.data.name = user.name;
-    socket.data.avatar = user.avatar;
-    console.log(`socket.data para ${socket.id}:`, socket.data);
-
+    // Notify others that a new user joined, sending their initial media state
     socket.to(roomId).emit("user-connected", {
       socketId: socket.id,
       name: user.name,
       avatar: user.avatar,
       peerId: user.peerId,
+      micOn: socket.data.micOn,
+      camOn: socket.data.camOn,
+      isScreenSharing: socket.data.isScreenSharing,
     });
 
+    // Send the curernt state of ALL existing users to the new joiner
     const sockets = await io.in(roomId).fetchSockets();
-    console.log(`Sockets en la sala ${roomId}:`, sockets.map((s) => ({ id: s.id, data: s.data })));
     const existingUsers = sockets
       .filter((s) => s.id !== socket.id)
       .map((s) => ({
         socketId: s.id,
-        name: s.data.name || "Usuario",
+        name: s.data.name || "Unknown User",
         avatar: s.data.avatar || null,
         peerId: s.data.peerId,
+        micOn: s.data.micOn ?? true,
+        camOn: s.data.camOn ?? true,
+        isScreenSharing: s.data.isScreenSharing ?? false,
       }));
 
-    console.log(`Enviando room-users a ${socket.id}:`, existingUsers);
     socket.emit("room-users", existingUsers);
   });
 
-  // Permite al cliente solicitar explícitamente la lista de participantes
+  // Presence & State Synchronization
   socket.on("request-presence", async ({ roomId }) => {
-    console.log(`Solicitud de presencia recibida desde ${socket.id} para sala ${roomId}`);
     try {
       const sockets = await io.in(roomId).fetchSockets();
-      console.log(`Sockets actualmente en ${roomId}:`, sockets.map((s)=>({id: s.id, data: s.data}))); 
       const existingUsers = sockets
         .filter((s) => s.id !== socket.id)
         .map((s) => ({
           socketId: s.id,
-          name: s.data.name || "Usuario",
+          name: s.data.name || "Unknown User",
           avatar: s.data.avatar || null,
           peerId: s.data.peerId,
+          micOn: s.data.micOn ?? true,
+          camOn: s.data.camOn ?? true,
+          isScreenSharing: s.data.isScreenSharing ?? false,
         }));
 
-      console.log(`Enviando ${existingUsers.length} participantes a ${socket.id} para la sala ${roomId}`);
       socket.emit("room-users", existingUsers);
     } catch (err) {
-      console.error("Error fetching presence for room:", err);
+      console.error(
+        `[Socket] Error fetching presence for room ${roomId}:`,
+        err,
+      );
     }
   });
 
+  // Media Controls Update
   socket.on("media-state", ({ roomId, micOn, camOn }) => {
-    // Re-emitir a todos en la sala excepto al emisor
-    socket.to(roomId).emit("media-state", {
-      socketId: socket.id,
-      micOn,
-      camOn,
-    });
-  });
+    // Update server-side state
+    socket.data.micOn = micOn;
+    socket.data.camOn = camOn;
 
-  socket.on("webrtc-offer", ({ offer, to }) => {
-    socket.to(to).emit("webrtc-offer", {
-      offer,
-      from: socket.id,
-    });
+    // Broadcast to room
+    socket
+      .to(roomId)
+      .emit("media-state", { socketId: socket.id, micOn, camOn });
   });
-
-  socket.on("webrtc-answer", ({ answer, to }) => {
-    socket.to(to).emit("webrtc-answer", {
-      answer,
-      from: socket.id,
-    });
-  });
-
-  socket.on("webrtc-ice-candidate", ({ candidate, to }) => {
-    socket.to(to).emit("webrtc-ice-candidate", {
-      candidate,
-      from: socket.id,
-    });
-  });
-
 
   socket.on("screen-share-started", ({ roomId }) => {
-    socket.to(roomId).emit("screen-share-started", {
-      socketId: socket.id,
-    });
+    socket.data.isScreenSharing = true;
+    socket.to(roomId).emit("screen-share-started", { socketId: socket.id });
   });
-  
-  socket.on("end-room", async ({ roomId }) => {
-    console.log(`Anfitrión (${socket.id}) finalizó la sala: ${roomId}`);
+
+  socket.on("screen-share-stopped", ({ roomId }) => {
+    socket.data.isScreenSharing = false;
+    socket.to(roomId).emit("screen-share-stopped", { socketId: socket.id });
+  });
+
+  socket.on("camera-stopped", ({ roomId }) => {
+    socket.data.camOn = false;
+    socket.to(roomId).emit("camera-stopped", { socketId: socket.id });
+  });
+
+  // Room Management
+  socket.on("end-room", ({ roomId }) => {
+    console.log(`[Socket] Host (${socket.id}) ended room: ${roomId}`);
     socket.to(roomId).emit("room-ended");
   });
 
+  // Manual WebRTS Signaling (Offers/Answers/ICE Candidates)
+  socket.on("webrtc-offer", ({ offer, to }) => {
+    socket.to(to).emit("webrtc-offer", { offer, from: socket.id });
+  });
+
+  socket.on("webrtc-answer", ({ answer, to }) => {
+    socket.to(to).emit("webrtc-answer", { answer, from: socket.id });
+  });
+
+  socket.on("webrtc-ice-candidate", ({ candidate, to }) => {
+    socket.to(to).emit("webrtc-ice-candidate", { candidate, from: socket.id });
+  });
+
+  // Disconnection Handling
   socket.on("disconnecting", () => {
-    const roomId = socket.data.roomId;
-    const peerId = socket.data.peerId;
-    console.log(`disconnecting: socket=${socket.id} room=${roomId} peerId=${peerId} socket.data=`, socket.data);
-    if (roomId) {
+    const { roomId, peerId } = socket.data;
+    if (roomId && peerId) {
       socket.to(roomId).emit("user-disconnected", socket.id, peerId);
     }
   });
 
-  socket.on("screen-share-stopped", ({ roomId }) => {
-    socket.to(roomId).emit("screen-share-stopped", {
-      socketId: socket.id,
-    });
-  });
-
-  socket.on("camera-stopped", ({ roomId }) => {
-    socket.to(roomId).emit("camera-stopped", {
-      socketId: socket.id,
-    });
-  });
-
   socket.on("disconnect", () => {
-    console.log(`Usuario desconectado (Socket.IO): ${socket.id}`);
+    console.log(`[Socket] User disconnected: ${socket.id}`);
   });
 });
 
+// START SERVER
+
 server.listen(PORT, () => {
-  console.log(`Servidor backend corriendo en el puerto ${PORT}`);
-  console.log(`Servidor PeerJS activo en http://localhost:${PORT}/peerjs`);
+  console.log(`[Server] Backend running on port ${PORT}`);
+  console.log(`[Server] PeerJS active at http://localhost:${PORT}/peerjs`);
 });
