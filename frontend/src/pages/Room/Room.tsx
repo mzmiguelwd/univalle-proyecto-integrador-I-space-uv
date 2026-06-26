@@ -14,14 +14,6 @@ import LeaveModal from "./LeaveModal.tsx";
 import PermissionAlert from "./PermissionAlert.tsx";
 import ParticipantsGrid from "./ParticipantsGrid.tsx";
 
-// TYPES
-
-interface RemoteMediaStream {
-  id: string;
-  stream: MediaStream;
-  type: "camera" | "screen";
-}
-
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -106,14 +98,11 @@ export default function Room() {
     handleRoomEnded,
   );
 
-  const typedRemoteStreams = remoteStreams as RemoteMediaStream[];
-
-  const screenStreams = typedRemoteStreams.filter(
+  const screenStreams = remoteStreams.filter(
     (stream) => stream.type === "screen",
   );
 
-  const activeScreenStream =
-    screenStreams.length > 0 ? screenStreams.at(-1) : null;
+  const activeScreenStream = screenStreams.at(-1) ?? null;
 
   const isPresenterMode = isScreenSharing || Boolean(activeScreenStream);
 

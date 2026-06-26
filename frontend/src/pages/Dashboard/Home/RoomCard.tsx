@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, Edit2, LogIn, Clock } from "lucide-react";
+import type { Timestamp, FieldValue } from "firebase/firestore";
 
 import { auth } from "../../../config/firebase.ts";
 import type { StudyRoom } from "../../../config/rooms.ts";
@@ -17,9 +18,16 @@ export interface RoomCardProps {
 
 /**
  * Formats the Firestore timestamp into a localized string.
+ * Safely handles FieldValue (serverTimestamp) before it resolves to a Date.
  */
-const formatRoomDate = (timestamp?: { toDate: () => Date }): string => {
-  if (!timestamp) return "Recientemente";
+const formatRoomDate = (timestamp?: Timestamp | FieldValue): string => {
+  if (
+    !timestamp ||
+    !("toDate" in timestamp) ||
+    typeof timestamp.toDate !== "function"
+  ) {
+    return "Recientemente";
+  }
 
   return timestamp.toDate().toLocaleDateString("es-CO", {
     day: "2-digit",
