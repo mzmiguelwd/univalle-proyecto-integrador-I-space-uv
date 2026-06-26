@@ -1,29 +1,18 @@
 import { useRef, useEffect } from "react";
 import { VideoOff, MicOff, Pin } from "lucide-react";
 
-// Types & Interfaces
+import type { Participant, RemoteStream } from "../../hooks/useWebRTC.ts";
 
-export interface Participant {
-  id: string;
-  name: string;
-  avatar?: string | null;
-  micOn?: boolean;
-  peerId?: string;
-}
+// TYPES & INTERFACES
 
-export interface RemoteStream {
-  id: string;
-  stream: MediaStream;
-}
-
-export interface UserProfile {
+export interface UserProfilePayload {
   name?: string;
   avatar?: string | null;
 }
 
 export interface ParticipantsGridProps {
   isPresenterMode: boolean;
-  profile: UserProfile;
+  profile: UserProfilePayload;
   isCameraOn: boolean;
   isMicrophoneOn: boolean;
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -31,9 +20,10 @@ export interface ParticipantsGridProps {
   remoteStreams: RemoteStream[];
   pinnedUserId: string | null;
   onPinUser: (id: string) => void;
+  remoteTracksUpdate?: number; // Optional trigger for deep re-renders if needed
 }
 
-// Constants & Helpers
+// CONSTANTS
 
 const AVATARS: Record<string, string> = {
   owl: "🦉",
@@ -50,6 +40,8 @@ const AVATARS: Record<string, string> = {
   compass: "🧭",
 };
 
+// HELPERS
+
 /**
  * Calculates the grid layout columns based on the total number of users.
  */
@@ -59,7 +51,7 @@ function getGridCols(totalParticipants: number): string {
   return "grid-cols-3";
 }
 
-// Sub-components
+// SUB-COMPONENTS
 
 /**
  * Renders the user's avatar based on their profile settings (URL, Emoji, or Initial).
@@ -68,14 +60,14 @@ function ParticipantAvatar({
   name,
   avatar,
   size = 13,
-}: {
+}: Readonly<{
   name: string;
   avatar?: string | null;
   size?: number;
-}) {
-  const cls = `h-${size} w-${size} rounded-full object-cover`;
+}>) {
+  const cls = `h-${size} w-${size} rounded-full object-cover shrink-0`;
 
-  if (avatar && avatar.startsWith("http")) {
+  if (avatar?.startsWith("http")) {
     return <img src={avatar} alt={name} className={cls} />;
   }
 
@@ -104,10 +96,10 @@ function ParticipantAvatar({
 function RemoteVideoCard({
   stream,
   participant,
-}: {
+}: Readonly<{
   stream: MediaStream;
   participant: Participant;
-}) {
+}>) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -122,19 +114,16 @@ function RemoteVideoCard({
         ref={videoRef}
         autoPlay
         playsInline
-        muted
         className="w-full h-full object-cover rounded-xl"
-      >
-        <track kind="captions" label="Captions" />
-      </video>
+      />
 
       {/* Name Tag */}
-      <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 truncate max-w-[80%]">
+      <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 truncate max-w-[80%] pointer-events-none">
         {participant.name.split(" ")[0]}
       </div>
 
       {/* Status Icons */}
-      <div className="absolute bottom-1.5 right-2 flex gap-1">
+      <div className="absolute bottom-1.5 right-2 flex gap-1 pointer-events-none">
         {participant.micOn === false && (
           <div className="bg-red-600/90 rounded-full p-0.5">
             <MicOff className="w-3 h-3 text-white" />
@@ -153,12 +142,12 @@ function AvatarCard({
   avatar,
   isYou = false,
   micOn = true,
-}: {
+}: Readonly<{
   name: string;
   avatar?: string | null;
   isYou?: boolean;
   micOn?: boolean;
-}) {
+}>) {
   return (
     <div className="w-full h-full flex items-center justify-between gap-3 px-4 py-3 bg-[#111827] rounded-xl">
       <div className="flex items-center gap-2.5 min-w-0">
@@ -188,7 +177,7 @@ function AvatarCard({
   );
 }
 
-// Main Component
+// MAIN COMPONENT
 
 /**
  * Displays a dynamic grid of all participants in the room.
@@ -204,12 +193,12 @@ export default function ParticipantsGrid({
   remoteStreams,
   pinnedUserId,
   onPinUser,
-}: ParticipantsGridProps) {
+}: Readonly<ParticipantsGridProps>) {
   const total = participants.length + 1; // +1 includes the local user
   const isSingleParticipant = total === 1;
 
   // Base classes for video cards (handling the "Pin" interactive state)
-  const baseCardStyles = `rounded-xl overflow-hidden relative border transition-all duration-200 cursor-pointer hover:border-sky-500/80 shadow-sm`;
+  const baseCardStyles = `rounded-xl overflow-hidden relative border transition-all duration-200 cursor-pointer hover:border-sky-500/80 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`;
   const getPinStyles = (isPinned: boolean) =>
     isPinned
       ? "border-sky-500 ring-2 ring-sky-500/50 scale-[0.98]"
@@ -223,17 +212,25 @@ export default function ParticipantsGrid({
 
   const cardMinHeight = isPresenterMode ? 80 : isSingleParticipant ? 144 : 72;
 
+  // Keyboard accessibility handler for pinning users
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onPinUser(id);
+    }
+  };
+
   return (
     <div className="shrink-0 flex flex-col">
       {/* ── Room Stats ── */}
       <div className="flex items-center justify-between text-xs text-gray-400 mb-2 px-1">
         <p>
-          {total} articipante{total !== 1 ? "s" : ""}
+          {total} participante{total === 1 ? "" : "s"}
         </p>
 
         {pinnedUserId && (
           <span className="text-[10px] text-sky-400 bg-sky-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <Pin className="w-3 h-3" /> Fijado
+            <Pin className="w-3 h-3" aria-hidden="true" /> Fijado
           </span>
         )}
       </div>
@@ -249,6 +246,7 @@ export default function ParticipantsGrid({
         {/* 1. LOCAL USER CARD */}
         <div
           onClick={() => onPinUser("local")}
+          onKeyDown={(e) => handleKeyDown(e, "local")}
           className={`${baseCardStyles} ${getPinStyles(pinnedUserId === "local")} ${cardSizeClass}`}
           style={{ minHeight: cardMinHeight }}
           role="button"
@@ -261,7 +259,9 @@ export default function ParticipantsGrid({
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover transform scale-x-[-1] rounded-xl ${!isCameraOn ? "hidden" : ""}`}
+            className={`w-full h-full object-cover transform scale-x-[-1] rounded-xl ${
+              isCameraOn ? "" : "hidden"
+            }`}
           />
 
           {/* Inactive Local Video (Avatar) */}
@@ -277,18 +277,18 @@ export default function ParticipantsGrid({
           {/* Floating Badges for Active Video */}
           {isCameraOn && (
             <>
-              <div className="absolute top-1.5 left-2 bg-sky-600/80 text-[9px] font-semibold px-1.5 py-0.5 rounded text-white shadow-sm">
+              <div className="absolute top-1.5 left-2 bg-sky-600/80 text-[9px] font-semibold px-1.5 py-0.5 rounded text-white shadow-sm pointer-events-none">
                 Tú
               </div>
               {!isMicrophoneOn && (
-                <div className="absolute bottom-1.5 right-2 bg-red-600/90 rounded-full p-0.5 shadow-sm">
+                <div className="absolute bottom-1.5 right-2 bg-red-600/90 rounded-full p-0.5 shadow-sm pointer-events-none">
                   <MicOff
                     className="w-3 h-3 text-white"
                     aria-label="Micrófono apagado"
                   />
                 </div>
               )}
-              <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 shadow-sm truncate max-w-[70%]">
+              <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 shadow-sm truncate max-w-[70%] pointer-events-none">
                 {profile.name?.split(" ")[0] || "Tú"}
               </div>
             </>
@@ -297,28 +297,26 @@ export default function ParticipantsGrid({
 
         {/* 2. REMOTE PARTICIPANTS CARDS */}
         {participants.map((participant) => {
-          // Resolve the correct ID used for streaming (PeerJS ID)
+          // Resolve the correct ID used for streaming (PeerJS ID acts as the stream key)
           const streamKey = participant.peerId || participant.id;
           const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
 
-          // Check if the stream actually has active video tracks being sent
-          const hasActiveVideo =
-            !!remoteVideo &&
-            remoteVideo.stream
-              .getVideoTracks()
-              .some((track) => track.readyState === "live" && track.enabled);
+          // The source of truth for the camera state comes from the Socket.IO sync,
+          // paired with the actual existence of the remote stream.
+          const isCamActive = participant.camOn && !!remoteVideo;
 
           return (
             <div
               key={participant.id}
               onClick={() => onPinUser(streamKey)}
+              onKeyDown={(e) => handleKeyDown(e, streamKey)}
               className={`${baseCardStyles} ${getPinStyles(pinnedUserId === streamKey)} ${cardSizeClass}`}
               style={{ minHeight: cardMinHeight }}
               role="button"
               tabIndex={0}
               aria-label={`Fijar video de ${participant.name}`}
             >
-              {hasActiveVideo ? (
+              {isCamActive ? (
                 <RemoteVideoCard
                   stream={remoteVideo.stream}
                   participant={participant}
