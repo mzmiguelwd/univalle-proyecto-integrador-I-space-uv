@@ -2,198 +2,205 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import Peer, { type MediaConnection } from "peerjs";
 
+// ENVIRONMENT & CONFIG
+
 const envSocketUrl = import.meta.env.VITE_SOCKET_SERVER_URL?.trim();
-const defaultSocketUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+const defaultSocketUrl = globalThis.window
+  ? globalThis.window.location.origin
+  : "http://localhost:3000";
 const SOCKET_SERVER_URL = envSocketUrl || defaultSocketUrl;
 
-if (typeof window !== "undefined" && !envSocketUrl) {
+if (globalThis.window && !envSocketUrl) {
   console.warn(
-    "[WARN] VITE_SOCKET_SERVER_URL no está definido. En producción esto probablemente causa un timeout al conectar Socket.IO/PeerJS.",
-    "Usando fallback:",
+    "[WARN] VITE_SOCKET_SERVER_URL no está definido. Usando fallback de entorno local:",
     SOCKET_SERVER_URL,
   );
 }
 
-console.info("Socket server config: ", {
-  envUrl: envSocketUrl,
-  computedUrl: SOCKET_SERVER_URL,
-});
 const url = new URL(SOCKET_SERVER_URL);
-const peerHost = url.hostname;
-let peerPort;
+
+let computedPort = 80;
 if (url.port) {
-  peerPort = Number.parseInt(url.port);
+  computedPort = Number.parseInt(url.port);
 } else if (url.protocol === "https:") {
-  peerPort = 443;
-} else {
-  peerPort = 80;
+  computedPort = 443;
 }
-console.info("Socket peer config:", { host: peerHost, port: peerPort, secure: url.protocol === "https:" });
 
 const PEERJS_CONFIG = {
-  host: peerHost,
-  port: peerPort,
+  host: url.hostname,
+  port: computedPort,
   path: "/peerjs",
   secure: url.protocol === "https:",
-  config: {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-    ],
-  },
 };
 
-export type Participant = {
-  id: string;
+// TYPES & INTERFACES
+
+export type RemoteStreamType = "camera" | "screen";
+
+export interface RemoteStream {
+  id: string; // Peer ID of the sender
+  stream: MediaStream;
+  type: RemoteStreamType;
+  trackId?: string;
+}
+
+export interface Participant {
+  id: string; // Socket ID
+  peerId: string;
   name: string;
   avatar?: string | null;
-  peerId?: string;
-  micOn: boolean; // ← nuevo
-  camOn: boolean; // ← nuevo (útil para indicador visual futuro)
-};
+  micOn: boolean;
+  camOn: boolean;
+  isScreenSharing: boolean;
+}
+
+export interface CurrentUserPayload {
+  uid: string;
+  name: string;
+  avatar?: string | null;
+}
+
+// MAIN HOOK
 
 export const useWebRTC = (
   roomId: string,
   localStream: MediaStream | null,
   screenStream: MediaStream | null,
-  currentUser: { uid: string; name: string; avatar?: string | null },
+  currentUser: CurrentUserPayload,
   onRoomEnded?: () => void,
 ) => {
-  const [remoteStreams, setRemoteStreams] = useState<
-    { id: string; stream: MediaStream }[]
-  >([]);
-  const [remoteTracksUpdate, setRemoteTracksUpdate] = useState(0); // ← forzar re-renders cuando cambian tracks
+  // STATES
+  const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
+  const [remoteTracksUpdate, setRemoteTracksUpdate] = useState(0); // Forces re-renders on track changes
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
+  // REFS
   const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<Peer | null>(null);
-  const callsRef = useRef<{ [peerId: string]: MediaConnection }>({});
+  const callsRef = useRef<Record<string, MediaConnection>>({});
 
-  const currentLocalStreamRef = useRef(localStream);
-  const currentScreenStreamRef = useRef(screenStream);
+  const localStreamRef = useRef<MediaStream | null>(localStream);
+  const screenStreamRef = useRef<MediaStream | null>(screenStream);
 
+  // Keep refs synced with React state for callbacks
   useEffect(() => {
-    currentLocalStreamRef.current = localStream;
-    currentScreenStreamRef.current = screenStream;
+    localStreamRef.current = localStream;
+    screenStreamRef.current = screenStream;
   }, [localStream, screenStream]);
 
-  const getCombinedStream = useCallback(() => {
+  // HELPERS
+
+  const getCombinedStream = useCallback((): MediaStream => {
     const combined = new MediaStream();
 
-    if (currentLocalStreamRef.current) {
-      currentLocalStreamRef.current.getTracks().forEach((track) => {
-        if (track.readyState !== "live") {
-          console.warn("Track no está live, ignorando:", { kind: track.kind, id: track.id, readyState: track.readyState });
-          return;
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        if (track.readyState === "live" && track.enabled) {
+          track.contentHint = "motion";
+          combined.addTrack(track);
         }
-        if (!track.enabled) {
-          console.debug("Track deshabilitado, ignorando:", { kind: track.kind, id: track.id });
-          return;
-        }
-        combined.addTrack(track);
       });
     }
 
-    if (currentScreenStreamRef.current) {
-      currentScreenStreamRef.current.getTracks().forEach((track) => {
-        if (track.readyState !== "live") {
-          console.warn("Screen track no está live, ignorando:", { kind: track.kind, id: track.id });
-          return;
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => {
+        if (track.readyState === "live") {
+          track.contentHint = "detail";
+          combined.addTrack(track);
         }
-        combined.addTrack(track);
       });
     }
 
-    console.debug("getCombinedStream: combinado contiene", combined.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })));
     return combined;
   }, []);
 
-  const cleanupPeerConnections = useCallback(() => {
-    socketRef.current?.disconnect();
-    peerRef.current?.destroy();
+  const cleanup = useCallback(() => {
+    console.info("Limpiando conexiones WebRTC y Sockets...");
     Object.values(callsRef.current).forEach((call) => call.close());
     callsRef.current = {};
+
+    if (peerRef.current) {
+      peerRef.current.disconnect();
+      peerRef.current.destroy();
+    }
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
     setRemoteStreams([]);
     setParticipants([]);
+    setSocket(null);
   }, []);
 
   const updatePeerTracks = useCallback(() => {
-    if (!peerRef.current) {
-      console.warn("updatePeerTracks: peerRef no inicializado");
-      return;
-    }
+    if (!peerRef.current) return;
 
     const combinedStream = getCombinedStream();
-    console.info("updatePeerTracks: Reiniciando llamadas con el nuevo stream");
+    console.info("Renegociando llamadas con el nuevo stream multimedia...");
 
-    // Recorremos todos los peers conectados actualmente
+    // Iterate over active connections and replace calls with new stream
     Object.keys(callsRef.current).forEach((targetPeerId) => {
-      // 1. Cerramos la conexión antigua
       if (callsRef.current[targetPeerId]) {
         callsRef.current[targetPeerId].close();
       }
 
-      // 2. Iniciamos una llamada nueva e inyectamos el stream actualizado
       const newCall = peerRef.current!.call(targetPeerId, combinedStream);
 
       newCall.on("stream", (userVideoStream) => {
         setRemoteStreams((prev) => {
           const filtered = prev.filter((s) => s.id !== targetPeerId);
-          return [...filtered, { id: targetPeerId, stream: userVideoStream }];
+          return [
+            ...filtered,
+            { id: targetPeerId, stream: userVideoStream, type: "camera" }, // Type can be refined later if needed
+          ];
         });
       });
 
-      newCall.on("error", (err: any) => {
-        console.error(`Error en la renegociación de llamada con ${targetPeerId}:`, err);
+      newCall.on("error", (err) => {
+        console.error(`Error renegociando llamada con ${targetPeerId}:`, err);
       });
 
-      // 3. Sobrescribimos la referencia con la nueva llamada
       callsRef.current[targetPeerId] = newCall;
     });
 
-    // Forzamos el renderizado de la UI
     setRemoteTracksUpdate((prev) => prev + 1);
-    console.info("updatePeerTracks: actualización completada");
   }, [getCombinedStream]);
 
-  // ── Emitir estado de micrófono/cámara al resto de la sala ──
-  // Llama esto desde Room.tsx cada vez que toggleMicrophone o toggleCamera cambie
   const emitMediaState = useCallback(
-    (micOn: boolean, camOn: boolean) => {
-      socketRef.current?.emit("media-state", { roomId, micOn, camOn });
+    (microphoneOn: boolean, cameraOn: boolean) => {
+      socketRef.current?.emit("media-state", {
+        roomId,
+        micOn: microphoneOn,
+        camOn: cameraOn,
+      });
     },
     [roomId],
   );
 
+  // CORE WEBRTC & SOCKET INITIALIZATION
+
   useEffect(() => {
     if (!roomId || !currentUser.uid) return;
 
-    const socket = io(SOCKET_SERVER_URL, {
-      transports: ["polling"],
-      path: "/socket.io",
+    // Initialize Socket.IO
+    const newSocket = io(SOCKET_SERVER_URL, {
+      transports: ["websocket", "polling"],
     });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      console.info(`Socket.IO connected (client) id=${socket.id}`);
-    });
-
-    socket.on("connect_error", (err: any) => {
-      console.error("Socket.IO connect_error:", err);
+    socketRef.current = newSocket;
+    newSocket.on("connect", () => {
+      setSocket(newSocket);
     });
 
-    socket.on("connect_timeout", (err: any) => {
-      console.warn("Socket.IO connect_timeout:", err);
-    });
-
+    // Initialize PeerJS
     const peer = new Peer(PEERJS_CONFIG);
     peerRef.current = peer;
 
     peer.on("open", (myPeerId) => {
-      console.info("PeerJS connected with ID:", myPeerId);
+      console.info(`Conectado a PeerJS. Mi ID: ${myPeerId}`);
 
-      console.info(`Emitiendo join-room con peerId=${myPeerId}`);
-      socket.emit("join-room", {
+      newSocket.emit("join-room", {
         roomId,
         user: {
           uid: currentUser.uid,
@@ -202,174 +209,100 @@ export const useWebRTC = (
           peerId: myPeerId,
         },
       });
-
-      // Reintentar la obtención de participantes en caso de que la lista inicial venga vacía
-      setTimeout(() => {
-        console.info("Solicitando presencia (request-presence) para asegurar lista de participantes...");
-        socket.emit("request-presence", { roomId });
-      }, 300);
     });
 
-    const callPeer = (targetPeerId: string) => {
-      if (!targetPeerId || callsRef.current[targetPeerId]) {
-        console.warn("callPeer: targetPeerId inválido o conexión ya existe", targetPeerId);
-        return;
-      }
+    // PEERJS EVENT LISTENERS
+
+    const callRemotePeer = (targetPeerId: string) => {
+      if (!targetPeerId || callsRef.current[targetPeerId]) return;
 
       const combinedStream = getCombinedStream();
-      console.info(`callPeer: iniciando llamada a peer ${targetPeerId}`);
-      console.debug("callPeer: stream combined", {
-        numTracks: combinedStream.getTracks().length,
-        tracks: combinedStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })),
-      });
+      console.info(`Llamando al participante con PeerID: ${targetPeerId}...`);
 
       const call = peer.call(targetPeerId, combinedStream);
       callsRef.current[targetPeerId] = call;
 
       call.on("stream", (userVideoStream) => {
-        console.info(`callPeer: stream recibido de ${call.peer}`, {
-          streamId: userVideoStream.id,
-          tracks: userVideoStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })),
-        });
         setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === call.peer)) {
-            console.debug(`Stream de ${call.peer} ya existe en remoteStreams, ignorando`);
-            return prev;
-          }
-          const next = [...prev, { id: call.peer, stream: userVideoStream }];
-          console.debug("setRemoteStreams: estado actualizado con", next.map(s => s.id));
-          return next;
+          if (prev.some((s) => s.id === call.peer)) return prev;
+          return [
+            ...prev,
+            { id: call.peer, stream: userVideoStream, type: "camera" },
+          ];
         });
       });
 
       call.on("close", () => {
-        console.info(`callPeer: call a ${targetPeerId} cerrada`);
-      });
-
-      call.on("error", (err: any) => {
-        console.error(`callPeer: error con ${targetPeerId}:`, err);
+        console.info(`Llamada con ${targetPeerId} finalizada.`);
       });
     };
 
-    peer.on("call", (call) => {
-      console.info(`peer.on("call"): llamada entrante desde ${call.peer}`);
+    peer.on("call", (incomingCall) => {
+      console.info(`Llamada entrante de PeerID: ${incomingCall.peer}`);
+
       const answerStream = getCombinedStream();
-
-      console.debug("peer.on('call'): respondiendo con stream", {
-        numTracks: answerStream.getTracks().length,
-        tracks: answerStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, id: t.id })),
-      });
-
       if (answerStream.getTracks().length > 0) {
-        console.info("peer.on('call'): respondiendo con stream activo");
-        call.answer(answerStream);
+        incomingCall.answer(answerStream);
       } else {
-        console.info("peer.on('call'): respondiendo sin stream (sin media local)");
-        call.answer();
+        incomingCall.answer();
       }
 
-      call.on("stream", (userVideoStream) => {
-        console.info(`peer.on("call"): stream actualizado recibido de ${call.peer}`);
+      incomingCall.on("stream", (userVideoStream) => {
         setRemoteStreams((prev) => {
-          // Ya no ignoramos el stream si existe, lo filtramos y lo reemplazamos
-          const filtered = prev.filter((s) => s.id !== call.peer);
-          return [...filtered, { id: call.peer, stream: userVideoStream }];
+          const filtered = prev.filter((s) => s.id !== incomingCall.peer);
+          return [
+            ...filtered,
+            { id: incomingCall.peer, stream: userVideoStream, type: "camera" },
+          ];
         });
       });
 
-      call.on("close", () => {
-        console.info(`peer.on("call"): call de ${call.peer} cerrada`);
-      });
-
-      call.on("error", (err: any) => {
-        console.error(`peer.on("call"): error con ${call.peer}:`, err);
-      });
-
-      callsRef.current[call.peer] = call;
+      callsRef.current[incomingCall.peer] = incomingCall;
     });
 
-    peer.on("error", (err:any) => {
-      console.error("PeerJS error:", err);
+    peer.on("error", (err) => {
+      console.error("Error en PeerJS:", err);
     });
 
-    peer.on("disconnected", () => {
-      console.warn("PeerJS disconnected");
+    // SOCKET.IO EVENT LISTENERS
+
+    newSocket.on("room-users", (users: Participant[]) => {
+      console.info(
+        `Sincronizando estado de sala: ${users.length} participantes encontrados.`,
+      );
+      setParticipants(users);
     });
 
-    peer.on("close", () => {
-      console.warn("PeerJS closed");
-    });
+    newSocket.on("user-connected", (user: Participant) => {
+      console.info(`Usuario unido: ${user.name} (Socket: ${user.id})`);
 
-    // ── room-users: lista inicial al unirse ─────────────────
-    socket.on("room-users", (users: any[]) => {
-      console.info(`room-users recibido con ${users.length} entradas`, users);
-      const participantsList: Participant[] = users.map((u) => ({
-        id: u.socketId,
-        name: u.name || u.user?.name || "Usuario",
-        avatar: u.avatar ?? u.user?.avatar ?? null,
-        peerId: u.peerId,
-        micOn: u.micOn ?? false, // respetar estado real si el servidor lo envía, sino false
-        camOn: u.camOn ?? false,
-      }));
-
-      setParticipants(participantsList);
-      console.debug("Participants state actualizado con room-users:", participantsList.map(p => ({id: p.id, peerId: p.peerId})));
-    });
-
-    // ── user-connected: nuevo participante entra ─────────────
-    socket.on("user-connected", ({ socketId, name, avatar, peerId }) => {
-      console.info(`user-connected: ${socketId} (peerId=${peerId}) nombre=${name}`);
       setParticipants((prev) => {
-        if (prev.some((p) => p.id === socketId)) return prev;
-        const next = [
-          ...prev,
-          {
-            id: socketId,
-            name: name || "Usuario",
-            avatar,
-            peerId,
-            micOn: false, // apagado por defecto hasta que el participante active
-            camOn: false,
-          },
-        ];
-        console.debug("Participants state tras user-connected:", next.map(p => ({id: p.id, peerId: p.peerId})));
-        return next;
+        if (prev.some((p) => p.id === user.id)) return prev;
+        return [...prev, user];
       });
 
-      if (peerId && peerId !== peer.id) {
-        console.info(`Solicitando conexión a peerId ${peerId}`);
-        callPeer(peerId);
+      if (user.peerId && user.peerId !== peer.id) {
+        callRemotePeer(user.peerId);
       }
     });
 
-    // ── media-state: alguien cambió su mic o cámara ──────────
-    socket.on(
-      "media-state",
-      ({
-        socketId,
-        micOn,
-        camOn,
-      }: {
-        socketId: string;
-        micOn: boolean;
-        camOn: boolean;
-      }) => {
-        console.info(`media-state de ${socketId}: micOn=${micOn} camOn=${camOn}`);
-        setParticipants((prev) =>
-          prev.map((p) => (p.id === socketId ? { ...p, micOn, camOn } : p)),
-        );
-      },
-    );
+    newSocket.on("media-state", ({ socketId, micOn, camOn }) => {
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === socketId ? { ...p, micOn, camOn } : p)),
+      );
+    });
 
-    socket.on(
+    newSocket.on(
       "user-disconnected",
-      (userId: string, disconnectedPeerId: string) => {
-        console.info(`user-disconnected: socket ${userId} peer ${disconnectedPeerId}`);
-        setParticipants((prev) => prev.filter((p) => p.id !== userId));
+      (socketId: string, disconnectedPeerId: string) => {
+        console.info(`Usuario desconectado. Socket: ${socketId}`);
+
+        setParticipants((prev) => prev.filter((p) => p.id !== socketId));
 
         if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
           callsRef.current[disconnectedPeerId].close();
           delete callsRef.current[disconnectedPeerId];
+
           setRemoteStreams((prev) =>
             prev.filter((s) => s.id !== disconnectedPeerId),
           );
@@ -377,28 +310,33 @@ export const useWebRTC = (
       },
     );
 
-    socket.on("room-ended", () => {
-      cleanupPeerConnections();
-      onRoomEnded?.();
+    newSocket.on("room-ended", () => {
+      console.info("El anfitrión ha finalizado la sala.");
+      cleanup();
+      if (onRoomEnded) onRoomEnded();
     });
 
     return () => {
-      cleanupPeerConnections();
+      cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, currentUser.uid]);
 
+  // DYNAMIC TRACK UPDATER
+
+  // This triggers renegotiation if the user toggles their camera or screen share on/off
   useEffect(() => {
     updatePeerTracks();
-  }, [localStream, screenStream, getCombinedStream, updatePeerTracks]);
+  }, [localStream, screenStream, updatePeerTracks]);
 
   return {
     remoteStreams,
-    remoteTracksUpdate, // ← usar como dependency para forzar re-renders
+    remoteTracksUpdate,
     participants,
     socketRef,
-    cleanupPeerConnections,
+    socket,
+    cleanup,
     emitMediaState,
-    updatePeerTracksCallback: updatePeerTracks, // ← permitir que Room.tsx lo llame directamente
+    updatePeerTracksCallback: updatePeerTracks,
   };
 };

@@ -1,63 +1,72 @@
+import { Link } from "react-router-dom";
 import { FaInstagram, FaLinkedin, FaXTwitter } from "react-icons/fa6";
 
-const footerSections = [
+// CONSTANTS
+
+const FOOTER_SECTIONS = [
   {
     title: "PRODUCTO",
-    items: ["Características", "Salas Públicas"],
+    items: [
+      { label: "Características", href: "/caracteristicas" },
+      { label: "Salas Públicas", href: "/salas" },
+    ],
   },
   {
     title: "COMPAÑÍA",
-    items: ["Sobre nosotros", "Blog"],
+    items: [
+      { label: "Sobre nosotros", href: "/nosotros" },
+      { label: "Blog", href: "/blog" },
+    ],
   },
   {
     title: "SOPORTE",
-    items: ["Ayuda", "Privacidad", "Términos"],
+    items: [
+      { label: "Ayuda", href: "/ayuda" },
+      { label: "Privacidad", href: "/privacidad" },
+      { label: "Términos", href: "/terminos" },
+    ],
   },
 ];
 
-export const Footer = () => {
-  return (
-    <footer className="flex flex-col items-start gap-16 p-16 relative self-stretch w-full bg-[#201f1f] border-t border-[#40484e4c] max-md:px-6 max-md:py-12">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-12 max-w-screen-xl w-full mx-auto">
-        {/* Branding */}
-        <div className="flex flex-col items-start gap-6">
-          <div>
-            <h2 className="font-bold text-[#8ecdfd] text-2xl leading-8">
-              EstudioSíncrono
-            </h2>
-          </div>
+// MAIN COMPONENT
 
-          <div>
-            <p className="text-[#c0c7cf] text-base leading-6">
-              Redefiniendo el estudio digital a
-              <br />
-              través de la presencia y la
-              <br />
-              comunidad.
-            </p>
-          </div>
+export default function Footer() {
+  // RENDER
+
+  return (
+    <footer className="w-full bg-[#201f1f] border-t border-[#40484e4c] px-6 py-12 md:px-16">
+      {/* TOP SECTION */}
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 md:grid-cols-4 gap-12 pb-16">
+        {/* BRANDING & DESCRIPTION */}
+        <div className="flex flex-col gap-4">
+          <h2 className="font-['Sora'] text-2xl font-bold text-[#8ecdfd]">
+            Space UV
+          </h2>
+          <p className="text-base text-[#c0c7cf] leading-relaxed">
+            Redefiniendo el estudio digital a través de la presencia y la
+            comunidad.
+          </p>
         </div>
 
-        {/* Links */}
-        {footerSections.map((section) => (
+        {/* FOOTER LINKS MAP */}
+        {FOOTER_SECTIONS.map((section) => (
           <nav
             key={section.title}
             aria-label={section.title}
-            className="flex flex-col items-start gap-6"
+            className="flex flex-col gap-6"
           >
-            <h3 className="font-medium text-[#e5e2e1] text-xs tracking-[0.60px] leading-4">
+            <h3 className="text-xs font-medium tracking-wide text-[#e5e2e1]">
               {section.title}
             </h3>
-
-            <ul className="flex flex-col gap-4 w-full">
+            <ul className="flex flex-col gap-4">
               {section.items.map((item) => (
-                <li key={item} className="list-none">
-                  <a
-                    href="#"
-                    className="text-[#c0c7cf] text-base leading-6 hover:text-[#8ecdfd] transition-colors"
+                <li key={item.label}>
+                  <Link
+                    to={item.href}
+                    className="text-base text-[#c0c7cf] transition-colors hover:text-[#8ecdfd]"
                   >
-                    {item}
-                  </a>
+                    {item.label}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -65,34 +74,38 @@ export const Footer = () => {
         ))}
       </div>
 
-      {/* Bottom */}
-      <div className="flex max-w-screen-xl items-center justify-between pt-8 border-t border-[#40484e33] w-full mx-auto max-md:flex-col max-md:gap-6">
-        <p className="text-[#c0c7cf99] text-base leading-6 text-center">
-          © 2026 Space UV. Todos los derechos reservados.
+      {/* BOTTOM SECTION */}
+      <div className="mx-auto flex w-full max-w-7xl flex-col-reverse md:flex-row items-center justify-between gap-6 border-t border-[#40484e33] pt-8">
+        <p className="text-center text-base text-[#c0c7cf99]">
+          © {new Date().getFullYear()} Space UV. Todos los derechos reservados.
         </p>
 
-        {/* Socials */}
-        <div className="flex items-center gap-4">
+        {/* SOCIAL LINKS */}
+        <div className="flex items-center gap-6">
           <a
-            href="#"
+            href="https://instagram.com"
+            target="_blank"
+            rel="noopener noreferrer"
             aria-label="Instagram"
-            className="text-[#c0c7cf] hover:text-[#8ecdfd] transition-colors"
+            className="text-[#c0c7cf] transition-colors hover:text-[#8ecdfd]"
           >
             <FaInstagram size={20} />
           </a>
-
           <a
-            href="#"
-            aria-label="X"
-            className="text-[#c0c7cf] hover:text-[#8ecdfd] transition-colors"
+            href="https://twitter.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="X (Twitter)"
+            className="text-[#c0c7cf] transition-colors hover:text-[#8ecdfd]"
           >
             <FaXTwitter size={20} />
           </a>
-
           <a
-            href="#"
+            href="https://linkedin.com"
+            target="_blank"
+            rel="noopener noreferrer"
             aria-label="LinkedIn"
-            className="text-[#c0c7cf] hover:text-[#8ecdfd] transition-colors"
+            className="text-[#c0c7cf] transition-colors hover:text-[#8ecdfd]"
           >
             <FaLinkedin size={20} />
           </a>
@@ -100,6 +113,4 @@ export const Footer = () => {
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}

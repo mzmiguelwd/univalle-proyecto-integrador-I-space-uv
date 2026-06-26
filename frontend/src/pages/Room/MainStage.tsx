@@ -1,103 +1,162 @@
 import { useEffect, useRef } from "react";
 import { MonitorUp, Pin } from "lucide-react";
 
-// Internal helper to render remote videos
-const RemoteVideo = ({
-  stream,
-  className = "w-full h-full object-cover",
-  muted = false,
-}: {
+import type { RemoteStream } from "../../hooks/useWebRTC.ts";
+
+// INTERFACES
+
+interface RemoteVideoProps {
   stream: MediaStream;
   className?: string;
   muted?: boolean;
-}) => {
+}
+
+interface MainStageProps {
+  isPresenterMode: boolean;
+  isScreenSharing: boolean;
+  screenVideoRef: React.RefObject<HTMLVideoElement | null>;
+  remoteStreams: RemoteStream[];
+  activeScreenStream: RemoteStream | null;
+  myStream: MediaStream | null;
+  pinnedUserId: string | null;
+}
+
+// SUB-COMPONENTS
+
+const RemoteVideo = ({
+  stream,
+  className = "h-full w-full object-cover",
+  muted = false,
+}: Readonly<RemoteVideoProps>) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
   }, [stream]);
 
   return (
+    // eslint-disable-next-line jsx-a11y/media-has-caption
     <video
       ref={videoRef}
       autoPlay
       playsInline
       muted={muted}
       className={className}
-    >
-      <track kind="captions" label="Captions" />
-    </video>
+    />
   );
 };
 
-interface MainStageProps {
-  isScreenSharing: boolean;
-  screenVideoRef: React.RefObject<HTMLVideoElement | null>;
-  remoteStreams: { id: string; stream: MediaStream }[];
-  myStream: MediaStream | null;
-  pinnedUserId: string | null;
-}
+// MAIN COMPONENT
 
 export default function MainStage({
   isScreenSharing,
   screenVideoRef,
   remoteStreams,
+  isPresenterMode,
+  activeScreenStream,
   myStream,
   pinnedUserId,
-}: MainStageProps) {
-  let displayedStream = null;
+}: Readonly<MainStageProps>) {
+  let displayedStream: MediaStream | null = null;
 
-  // When not presenting a screen, choose a video to display in the main stage
+  // Display priority logic
   if (!isScreenSharing) {
     if (pinnedUserId === "local" && myStream) {
       displayedStream = myStream;
     } else if (pinnedUserId) {
-      displayedStream = remoteStreams.find((s) => s.id === pinnedUserId)?.stream;
+      displayedStream =
+        remoteStreams.find((s) => s.id === pinnedUserId)?.stream ?? null;
+    } else if (activeScreenStream) {
+      displayedStream = activeScreenStream.stream;
     } else if (remoteStreams.length > 0) {
-      displayedStream = remoteStreams[remoteStreams.length - 1].stream;
+      displayedStream = remoteStreams.at(-1)?.stream ?? null;
     }
   }
 
-  return (
-    <div className="flex-1 bg-[#1A1A1A] rounded-2xl overflow-hidden relative border border-gray-800 flex flex-col">
-      {isScreenSharing ? (
+  // RENDERING LOGIC
+
+  const renderMainContent = () => {
+    if (isScreenSharing) {
+      return (
         <video
           ref={screenVideoRef}
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-contain bg-black"
+          className="h-full w-full bg-black object-contain"
         />
-      ) : displayedStream ? (
+      );
+    }
+
+    if (displayedStream) {
+      return (
         <RemoteVideo
           stream={displayedStream}
           muted={pinnedUserId === "local"}
-          className={`w-full h-full object-contain bg-black ${pinnedUserId === "local" ? "transform scale-x-[-1]" : ""}`}
+          className={`h-full w-full bg-black object-contain ${
+            pinnedUserId === "local" ? "scale-x-[-1] transform" : ""
+          }`}
         />
-      ) : (
-        <div className="absolute inset-0 bg-linear-to-br from-[#0d1522] to-[#111827] flex items-center justify-center">
-          <pre className="text-sky-500/30 font-mono text-sm sm:text-lg md:text-2xl p-8 opacity-50 select-none">
-            {`// Esperando transmisión...`}
-          </pre>
-        </div>
-      )}
+      );
+    }
 
-      <div className="absolute bottom-4 left-4 bg-[#0A304E] text-sky-200 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-2 z-10">
-        {isScreenSharing ? (
-          <>
-            <MonitorUp className="w-4 h-4" /> Tu presentación
-          </>
-        ) : pinnedUserId ? (
-          <>
-            <Pin className="w-4 h-4" /> Video fijado
-          </>
-        ) : remoteStreams.length > 0 ? (
-          <>
-            <MonitorUp className="w-4 h-4" /> Viendo presentación externa
-          </>
-        ) : (
-          "El área está libre"
-        )}
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-[#0d1522] to-[#111827]">
+        <pre className="select-none p-8 font-mono text-sm text-sky-500/30 opacity-50 sm:text-lg md:text-2xl">
+          {`// Esperando transmisión...`}
+        </pre>
+      </div>
+    );
+  };
+
+  const renderStatusLabel = () => {
+    if (isScreenSharing) {
+      return (
+        <>
+          <MonitorUp className="h-4 w-4" aria-hidden="true" /> Tu presentación
+        </>
+      );
+    }
+
+    if (pinnedUserId) {
+      return (
+        <>
+          <Pin className="h-4 w-4" aria-hidden="true" /> Video fijado
+        </>
+      );
+    }
+
+    if (activeScreenStream) {
+      return (
+        <>
+          <MonitorUp className="h-4 w-4" aria-hidden="true" /> Viendo
+          presentación externa
+        </>
+      );
+    }
+
+    return "El área está libre";
+  };
+
+  // RENDER
+
+  return (
+    <div
+      className={`relative flex min-h-90 flex-1 flex-col overflow-hidden rounded-2xl border bg-[#1A1A1A] transition-all duration-300 ${
+        isPresenterMode
+          ? "border-sky-500/40 shadow-[0_0_40px_rgba(14,165,233,0.12)] lg:flex-[1_1_75%]"
+          : "border-gray-800"
+      }`}
+    >
+      {renderMainContent()}
+
+      <div
+        aria-live="polite"
+        className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded bg-[#0A304E] px-3 py-1.5 text-xs font-bold text-sky-200"
+      >
+        {renderStatusLabel()}
       </div>
     </div>
   );
