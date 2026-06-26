@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
@@ -43,8 +43,14 @@ export default function Room() {
   // HARDWARE REFS
   // Using refs to keep track of individual tracks without triggering unnecessary re-renders
   const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Sincronizar el estado en pantalla con la referencia
+  useEffect(() => {
+    screenStreamRef.current = screenStream;
+  }, [screenStream]);
 
   //  1. INITIALIZATION: LOAD PROFILE & ROOM DATA
   useEffect(() => {
@@ -61,7 +67,7 @@ export default function Room() {
           }
         }
       } catch (err) {
-        console.error("[Room] Error loading room configuration:", err);
+        console.error("[Room] Error cargando configuración:", err);
       } finally {
         setLoading(false);
       }
@@ -86,12 +92,8 @@ export default function Room() {
     cleanup,
     emitMediaState,
     updatePeerTracksCallback,
-  } = useWebRTC(
-    roomId ?? "",
-    myStream,
-    screenStream,
-    currentUserPayload,
-    () => navigate("/dashboard"), // Callback when host ends the room
+  } = useWebRTC(roomId ?? "", myStream, screenStream, currentUserPayload, () =>
+    navigate("/dashboard"),
   );
 
   // 3. DERIVED MEDIA STATES
@@ -112,7 +114,6 @@ export default function Room() {
     const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
 
     if (isMicrophoneOn) {
-      // Turn off mic
       currentAudioTracks.forEach((track) => {
         track.enabled = false;
         track.stop();
@@ -126,11 +127,10 @@ export default function Room() {
       setMyStream(nextStream);
       setIsMicrophoneOn(false);
 
-      console.info("[Hardware] Microphone muted.");
+      console.info("[Hardware] Micrófono silenciado localmente.");
       emitMediaState(false, isCameraOn);
       updatePeerTracksCallback?.();
     } else {
-      // Turn on mic
       try {
         setPermissionError(null);
         const audioStream = await navigator.mediaDevices.getUserMedia({
@@ -147,11 +147,11 @@ export default function Room() {
         setMyStream(newStream);
         setIsMicrophoneOn(true);
 
-        console.info("[Hardware] Microphone enabled.");
+        console.info("[Hardware] Micrófono encendido exitosamente.");
         emitMediaState(true, isCameraOn);
         updatePeerTracksCallback?.();
       } catch (err) {
-        console.error("[Hardware] Error accessing microphone:", err);
+        console.error("[Hardware] Error de acceso a micrófono:", err);
         setPermissionError(
           "Permiso de micrófono denegado. Por favor, habilítalo en tu navegador.",
         );
@@ -164,12 +164,11 @@ export default function Room() {
     const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
 
     if (isCameraOn) {
-      // Turn off camera
       currentVideoTracks.forEach((track) => {
         track.enabled = false;
         track.stop();
       });
-      socketRef.current?.emit("camera-stopped", { roomId }); // Notify others immediately
+      socketRef.current?.emit("camera-stopped", { roomId });
 
       const nextStream =
         currentAudioTracks.length > 0
@@ -182,11 +181,10 @@ export default function Room() {
 
       if (localVideoRef.current) localVideoRef.current.srcObject = nextStream;
 
-      console.info("[Hardware] Camera disabled.");
+      console.info("[Hardware] Cámara apagada localmente.");
       emitMediaState(isMicrophoneOn, false);
       updatePeerTracksCallback?.();
     } else {
-      // Turn on camera
       try {
         setPermissionError(null);
         const videoStream = await navigator.mediaDevices.getUserMedia({
@@ -204,11 +202,11 @@ export default function Room() {
         if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
         setIsCameraOn(true);
 
-        console.info("[Hardware] Camera enabled.");
+        console.info("[Hardware] Cámara encendida exitosamente.");
         emitMediaState(isMicrophoneOn, true);
         updatePeerTracksCallback?.();
       } catch (err) {
-        console.error("[Hardware] Error accessing camera:", err);
+        console.error("[Hardware] Error de acceso a cámara:", err);
         setPermissionError(
           "Permiso de cámara denegado. Por favor, habilítalo en tu navegador.",
         );
@@ -218,17 +216,13 @@ export default function Room() {
 
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      // Stop sharing
       screenStream?.getTracks().forEach((track) => track.stop());
       socketRef.current?.emit("screen-share-stopped", { roomId });
 
       setScreenStream(null);
       setIsScreenSharing(false);
       if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-
-      console.info("[Hardware] Screen sharing stopped manually.");
     } else {
-      // Start sharing
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
@@ -242,39 +236,59 @@ export default function Room() {
           if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
         }, 100);
 
-        // Listen for the native browser "Stop sharing" button
         stream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
           setScreenStream(null);
           socketRef.current?.emit("screen-share-stopped", { roomId });
           if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-          console.info("[Hardware] Screen sharing stopped via browser UI.");
         };
       } catch (err) {
-        console.error("[Hardware] Error sharing screen:", err);
+        console.error("[Hardware] Error al compartir pantalla:", err);
       }
     }
   };
 
   // 5. CLEANUP & LEAVE HANDLERS
 
-  const stopAllLocalHardware = () => {
-    myStream?.getTracks().forEach((t) => t.stop());
-    screenStream?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    setMyStream(null);
-    setScreenStream(null);
-  };
+  const stopAllLocalHardware = useCallback(() => {
+    console.info(
+      "[Hardware] Forzando liberación de memoria y apagado físico de dispositivos...",
+    );
+
+    const releaseStream = (stream: MediaStream | null) => {
+      if (stream) {
+        stream.getTracks().forEach((track) => {
+          track.stop(); // Corta el acceso físico al dispositivo (apaga la luz de la cámara)
+          track.enabled = false;
+          console.debug(
+            `[Hardware] Track liberado: ${track.kind} (${track.id})`,
+          );
+        });
+      }
+    };
+
+    releaseStream(localStreamRef.current);
+    releaseStream(screenStreamRef.current);
+
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+
+    localStreamRef.current = null;
+    screenStreamRef.current = null;
+  }, []);
 
   useEffect(() => {
-    // Failsafe cleanup when component unmounts unexpectedly
-    return () => stopAllLocalHardware();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      console.info(
+        "[Room] Desmontando componente, disparando failsafe de hardware.",
+      );
+      stopAllLocalHardware();
+    };
+  }, [stopAllLocalHardware]);
 
   const handleLeaveOnly = () => {
     stopAllLocalHardware();
-    cleanup(); // Disconnects Socket and PeerJS
+    cleanup();
     navigate("/dashboard");
   };
 
@@ -283,14 +297,12 @@ export default function Room() {
     setIsProcessing(true);
 
     try {
-      // Broadcast end-room event. The room stays alive in Firebase for future use.
       socketRef.current?.emit("end-room", { roomId });
-
       stopAllLocalHardware();
       cleanup();
       navigate("/dashboard");
     } catch (error) {
-      console.error("[Room] Error ending room for all:", error);
+      console.error("[Room] Error al finalizar la sala:", error);
       setIsProcessing(false);
     }
   };
@@ -346,7 +358,6 @@ export default function Room() {
             localVideoRef={localVideoRef}
             participants={participants}
             remoteStreams={cameraStreamsOnly}
-            remoteTracksUpdate={0} // Passed from hook if needed for deep re-renders
             pinnedUserId={pinnedUserId}
             onPinUser={(id) =>
               setPinnedUserId((prev) => (prev === id ? null : id))

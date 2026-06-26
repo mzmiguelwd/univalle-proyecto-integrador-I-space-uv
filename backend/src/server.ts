@@ -165,8 +165,8 @@ io.on("connection", (socket) => {
     socket.data = {
       roomId,
       ...user,
-      micOn: true, // Default state assumption
-      camOn: true, // Default state assumption
+      micOn: false, // Default state assumption
+      camOn: false, // Default state assumption
       isScreenSharing: false,
     };
 
