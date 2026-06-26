@@ -5,9 +5,7 @@ import Peer, { type MediaConnection } from "peerjs";
 // ENVIRONMENT & CONFIG
 
 const envSocketUrl = import.meta.env.VITE_SOCKET_SERVER_URL?.trim();
-const defaultSocketUrl = globalThis.window
-  ? globalThis.window.location.origin
-  : "http://localhost:3000";
+const defaultSocketUrl = "http://localhost:3000";
 const SOCKET_SERVER_URL = envSocketUrl || defaultSocketUrl;
 
 if (globalThis.window && !envSocketUrl) {
@@ -115,6 +113,54 @@ export const useWebRTC = (
     return combined;
   }, []);
 
+  const processIncomingStream = useCallback(
+    (targetPeerId: string, incomingStream: MediaStream) => {
+      const newStreams: RemoteStream[] = [];
+      const audioTracks = incomingStream.getAudioTracks();
+      const videoTracks = incomingStream.getVideoTracks();
+
+      // Separar usando el contentHint que configuraste
+      const screenTrack = videoTracks.find(
+        (track) => track.contentHint === "detail",
+      );
+      const cameraTrack = videoTracks.find(
+        (track) => track.contentHint !== "detail",
+      );
+
+      // 1. Armar el stream de la cámara (Video + Audio)
+      if (cameraTrack || audioTracks.length > 0) {
+        const cameraMediaStream = new MediaStream();
+        if (cameraTrack) cameraMediaStream.addTrack(cameraTrack);
+        audioTracks.forEach((track) => cameraMediaStream.addTrack(track));
+
+        newStreams.push({
+          id: targetPeerId,
+          stream: cameraMediaStream,
+          type: "camera",
+        });
+      }
+
+      // 2. Armar el stream de la pantalla (Solo Video usualmente)
+      if (screenTrack) {
+        const screenMediaStream = new MediaStream();
+        screenMediaStream.addTrack(screenTrack);
+
+        newStreams.push({
+          id: targetPeerId,
+          stream: screenMediaStream,
+          type: "screen",
+        });
+      }
+
+      // Actualizar el estado limpiando los streams anteriores de este usuario
+      setRemoteStreams((prev) => {
+        const filtered = prev.filter((s) => s.id !== targetPeerId);
+        return [...filtered, ...newStreams];
+      });
+    },
+    [],
+  );
+
   const cleanup = useCallback(() => {
     console.info("Limpiando conexiones WebRTC y Sockets...");
     Object.values(callsRef.current).forEach((call) => call.close());
@@ -149,13 +195,7 @@ export const useWebRTC = (
       const newCall = peerRef.current!.call(targetPeerId, combinedStream);
 
       newCall.on("stream", (userVideoStream) => {
-        setRemoteStreams((prev) => {
-          const filtered = prev.filter((s) => s.id !== targetPeerId);
-          return [
-            ...filtered,
-            { id: targetPeerId, stream: userVideoStream, type: "camera" }, // Type can be refined later if needed
-          ];
-        });
+        processIncomingStream(targetPeerId, userVideoStream);
       });
 
       newCall.on("error", (err) => {
@@ -223,17 +263,13 @@ export const useWebRTC = (
       callsRef.current[targetPeerId] = call;
 
       call.on("stream", (userVideoStream) => {
-        setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === call.peer)) return prev;
-          return [
-            ...prev,
-            { id: call.peer, stream: userVideoStream, type: "camera" },
-          ];
-        });
+        processIncomingStream(targetPeerId, userVideoStream);
       });
 
+      // NO OLVIDES agregar el listener de cierre para evitar cámaras congeladas
       call.on("close", () => {
         console.info(`Llamada con ${targetPeerId} finalizada.`);
+        setRemoteStreams((prev) => prev.filter((s) => s.id !== targetPeerId));
       });
     };
 
@@ -248,13 +284,14 @@ export const useWebRTC = (
       }
 
       incomingCall.on("stream", (userVideoStream) => {
-        setRemoteStreams((prev) => {
-          const filtered = prev.filter((s) => s.id !== incomingCall.peer);
-          return [
-            ...filtered,
-            { id: incomingCall.peer, stream: userVideoStream, type: "camera" },
-          ];
-        });
+        processIncomingStream(incomingCall.peer, userVideoStream);
+      });
+
+      // Limpieza al cerrar la llamada entrante
+      incomingCall.on("close", () => {
+        setRemoteStreams((prev) =>
+          prev.filter((s) => s.id !== incomingCall.peer),
+        );
       });
 
       callsRef.current[incomingCall.peer] = incomingCall;
