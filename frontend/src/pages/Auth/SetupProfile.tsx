@@ -19,7 +19,7 @@ interface SetupProfileProps {
 const DesktopHeroPanel = () => (
   <div
     className="hidden lg:flex lg:w-1/2 relative bg-cover bg-center"
-    style={{ backgroundImage: "url('/Study-focus.png')" }}
+    style={{ backgroundImage: "url('/study-focus.png')" }}
   >
     <div className="absolute inset-0 bg-linear-to-br from-[#0d0f14]/75 via-[#0d0f14]/45 to-transparent" />
     <div className="relative z-10 flex flex-col justify-between p-10 w-full">
