@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { Send, Loader2 } from "lucide-react";
 
@@ -9,7 +9,7 @@ import ChatHistory from "./ChatHistory.tsx";
 
 // INTERFACES
 
-interface ChatPanelProps {
+export interface ChatPanelProps {
   roomId: string;
   profile: UserProfile;
 }
@@ -23,9 +23,12 @@ export default function ChatPanel({
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Reference to manually manage input focus
+  const inputRef = useRef<HTMLInputElement>(null);
+
   /**
    * Handles the form submission to send a new message to Firestore.
-   * Includes optimistic UI clearing and fallback restoration on error.
+   * Includes optimistic UI clearing and focus management for continuous typing.
    */
   const handleSendMessage = async (
     event?: React.SubmitEvent<HTMLFormElement>,
@@ -33,16 +36,19 @@ export default function ChatPanel({
     // Prevent default form behavior (page reload)
     if (event) event.preventDefault();
 
-    const cleanText = message.trim().replace(/[<>]/g, "");
+    const cleanText = message.trim().replace(/[<>]/g, ""); // Basic XSS sanitization
 
-    // Guard clause to prevent empty submissions or unauthorized access
+    // Guard clause to prevent empty submissions
     if (!roomId || !cleanText || !auth.currentUser || isSubmitting) return;
 
     setIsSubmitting(true);
 
-    // Store backup in case the network request fails
+    // Optimistic UI: Store backup and clear input immediately
+    // This allows the user to start typing the next message right away
     const backupMessage = message;
     setMessage("");
+
+    inputRef.current?.focus();
 
     try {
       await addDoc(collection(db, "rooms", roomId, "messages"), {
@@ -52,8 +58,7 @@ export default function ChatPanel({
         timestamp: serverTimestamp(),
       });
     } catch (error) {
-      console.error("Error al enviar el mensaje:", error);
-      // Restore user input so they don't lose their typed message
+      console.error("[ChatPanel] Error al enviar el mensaje:", error);
       setMessage(backupMessage);
     } finally {
       setIsSubmitting(false);
@@ -86,10 +91,10 @@ export default function ChatPanel({
           className="flex items-center rounded-xl border border-gray-700 bg-[#1E1E1E] pr-2 transition-all focus-within:border-sky-500/50 focus-within:ring-1 focus-within:ring-sky-500/50"
         >
           <input
+            ref={inputRef}
             type="text"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            disabled={isSubmitting}
             placeholder="Escribe un mensaje..."
             aria-label="Escribir mensaje de chat"
             className="flex-1 bg-transparent px-3 py-2 text-white outline-none disabled:opacity-50"

@@ -11,6 +11,7 @@ interface RemoteVideoProps {
 
 interface MainStageProps {
   isScreenSharing: boolean;
+  isPresenterMode: boolean;
   screenVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteStreams: RemoteStream[];
   activeScreenStream: RemoteStream | null;
