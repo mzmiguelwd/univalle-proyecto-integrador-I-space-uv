@@ -374,24 +374,42 @@ export default function Room() {
         />
       )}
 
-      <section className="flex flex-1 p-4 gap-4 overflow-hidden h-[calc(100vh-80px)] transition-all duration-300">
-        <MainStage
-          isScreenSharing={isScreenSharing}
-          isPresenterMode={isPresenterMode}
-          screenVideoRef={screenVideoRef}
-          remoteStreams={remoteStreams}
-          activeScreenStream={activeScreenStream}
-          myStream={myStream}
-          pinnedUserId={pinnedUserId}
-        />
+      <section className="flex flex-col lg:flex-row flex-1 p-3 sm:p-4 gap-4 overflow-hidden h-[calc(100vh-80px)] transition-all duration-300">
+        {/* MAINSTAGE (ÁREA DE PROYECTOS / PANTALLA COMPARTIDA) */}
+        {/* En desktop siempre está visible en la izquierda. En mobile se muestra arriba solo si hay una transmisión activa o un usuario fijado */}
+        <div
+          className={`transition-all duration-300 ${
+            activeScreenStream || isScreenSharing || pinnedUserId
+              ? "flex h-[32vh] sm:h-[38vh] lg:h-auto lg:flex-1"
+              : "hidden lg:flex lg:flex-1"
+          }`}
+        >
+          <MainStage
+            isScreenSharing={isScreenSharing}
+            isPresenterMode={isPresenterMode}
+            screenVideoRef={screenVideoRef}
+            remoteStreams={remoteStreams}
+            activeScreenStream={activeScreenStream}
+            myStream={myStream}
+            pinnedUserId={pinnedUserId}
+          />
+        </div>
 
+        {/* PANEL LATERAL / INFERIOR (PARTICIPANTES Y CHAT) */}
         <aside
-          className={`flex flex-col gap-4 transition-all duration-300 ${
+          className={`flex flex-col gap-3 sm:gap-4 transition-all duration-300 flex-1 lg:flex-none ${
             isPresenterMode ? "w-full lg:w-70 xl:w-[320px]" : "w-full lg:w-95"
           }`}
         >
-          {/* Envolvemos el Grid para que se expanda cuando el chat esté cerrado */}
-          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {/* REJILLA DE PARTICIPANTES */}
+          {/* En desktop (lg:flex-none) solo toma el espacio estrictamente necesario para los videos. En mobile (flex-1) ocupa todo si el chat está cerrado */}
+          <div
+            className={`flex-col overflow-hidden min-h-0 ${
+              isChatOpen
+                ? "hidden lg:flex lg:flex-none lg:shrink"
+                : "flex flex-1 lg:flex-none lg:shrink"
+            }`}
+          >
             <ParticipantsGrid
               profile={profile}
               isPresenterMode={isPresenterMode}
@@ -407,12 +425,15 @@ export default function Room() {
             />
           </div>
 
-          {/* Renderizado condicional del ChatPanel */}
-          {isChatOpen && (
-            <div className="h-[40vh] lg:h-auto lg:flex-1 flex flex-col shrink-0 overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-4">
-              <ChatPanel roomId={roomId ?? ""} profile={profile} />
-            </div>
-          )}
+          {/* PANEL DE CHAT */}
+          {/* Al tener flex-1, absorberá de forma automática TODO el espacio disponible hasta llegar a la barra de controles */}
+          <div
+            className={`flex-col flex-1 overflow-hidden min-h-0 transition-all duration-300 ${
+              isChatOpen ? "flex" : "hidden lg:flex"
+            }`}
+          >
+            <ChatPanel roomId={roomId ?? ""} profile={profile} />
+          </div>
         </aside>
       </section>
       <ControlsBar
