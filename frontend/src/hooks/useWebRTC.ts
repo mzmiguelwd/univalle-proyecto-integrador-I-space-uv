@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
-import Peer, { MediaConnection } from "peerjs";
+import Peer, { type MediaConnection } from "peerjs";
 
 // ── ENVIRONMENT & CONFIGURATION ───────────────────────────────────────
 
