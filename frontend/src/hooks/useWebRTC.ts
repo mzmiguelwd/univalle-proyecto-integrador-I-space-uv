@@ -150,10 +150,12 @@ export const useWebRTC = (
     if (peerRef.current) {
       peerRef.current.disconnect();
       peerRef.current.destroy();
+      peerRef.current = null;
     }
 
     if (socketRef.current) {
       socketRef.current.disconnect();
+      socketRef.current = null;
     }
 
     setRemoteStreams([]);
@@ -168,7 +170,9 @@ export const useWebRTC = (
     if (!peerRef.current) return;
 
     const combinedStream = getCombinedStream();
-    console.info("[WebRTC] Renegotiating calls with updated media stream...");
+    console.info(
+      "[WebRTC] Renegociando llamadas con el nuevo stream multimedia...",
+    );
 
     Object.keys(callsRef.current).forEach((targetPeerId) => {
       // Close the old connection for this peer
@@ -184,7 +188,6 @@ export const useWebRTC = (
           const filtered = prev.filter((s) => s.id !== targetPeerId);
           return [
             ...filtered,
-            // Note: If you implement dual-streams later, you can map 'type' based on video constraints
             { id: targetPeerId, stream: userVideoStream, type: "camera" },
           ];
         });
@@ -192,7 +195,7 @@ export const useWebRTC = (
 
       newCall.on("error", (err) => {
         console.error(
-          `[WebRTC] Error renegotiating call with ${targetPeerId}:`,
+          `[WebRTC] Error renegociando llamada con ${targetPeerId}:`,
           err,
         );
       });
@@ -236,7 +239,7 @@ export const useWebRTC = (
     newSocket.on("connect", () => {
       setSocket(newSocket);
       console.info(
-        `[Socket.IO] Connected to signaling server with ID: ${newSocket.id}`,
+        `[Socket.IO] Conectado al servidor de señalización con ID: ${newSocket.id}`,
       );
     });
 
@@ -245,7 +248,7 @@ export const useWebRTC = (
     peerRef.current = peer;
 
     peer.on("open", (myPeerId) => {
-      console.info(`[PeerJS] Connected to peer server. My PeerID: ${myPeerId}`);
+      console.info(`[PeerJS] Conectado a PeerJS. Mi PeerID: ${myPeerId}`);
 
       // Join the room in the backend ONLY after PeerJS is ready
       newSocket.emit("join-room", {
@@ -265,7 +268,7 @@ export const useWebRTC = (
       if (!targetPeerId || callsRef.current[targetPeerId]) return;
 
       const combinedStream = getCombinedStream();
-      console.info(`[WebRTC] Calling PeerID: ${targetPeerId}...`);
+      console.debug(`[WebRTC] Llamando al PeerID: ${targetPeerId}...`);
 
       const call = peer.call(targetPeerId, combinedStream);
       callsRef.current[targetPeerId] = call;
@@ -288,7 +291,11 @@ export const useWebRTC = (
 
     // When someone else calls US
     peer.on("call", (incomingCall) => {
-      console.info(`[WebRTC] Incoming call from PeerID: ${incomingCall.peer}`);
+      console.info(`[WebRTC] Llamada entrante de PeerID: ${incomingCall.peer}`);
+
+      if (callsRef.current[incomingCall.peer]) {
+        callsRef.current[incomingCall.peer].close();
+      }
 
       const answerStream = getCombinedStream();
 
@@ -312,32 +319,49 @@ export const useWebRTC = (
     });
 
     peer.on("error", (err) => {
-      console.error("[PeerJS] Fatal error:", err);
+      console.error("[PeerJS] Error crítico:", err);
     });
 
     // SOCKET.IO EVENT LISTENERS
 
     // Late Joiner resolution: Receiving the current state of the room
-    newSocket.on("room-users", (users: Participant[]) => {
+    newSocket.on("room-users", (users: any[]) => {
       console.info(
-        `[Socket.IO] Syncing room state: ${users.length} existing participants.`,
+        `[Socket.IO] Sincronizando estado: ${users.length} participantes existentes.`,
       );
-      setParticipants(users);
+      const mappedUsers: Participant[] = users.map((u) => ({
+        id: u.socketId, // <- SOLUCIÓN AL BUG DEL FANTASMA
+        peerId: u.peerId,
+        name: u.name,
+        avatar: u.avatar,
+        micOn: u.micOn,
+        camOn: u.camOn,
+        isScreenSharing: u.isScreenSharing,
+      }));
+      setParticipants(mappedUsers);
     });
 
-    newSocket.on("user-connected", (user: Participant) => {
+    newSocket.on("user-connected", (user: any) => {
       console.info(
-        `[Socket.IO] User joined: ${user.name} (Socket: ${user.id})`,
+        `[Socket.IO] Usuario unido: ${user.name} (Socket: ${user.socketId})`,
       );
+      const mappedUser: Participant = {
+        id: user.socketId, // <- SOLUCIÓN AL BUG DEL FANTASMA
+        peerId: user.peerId,
+        name: user.name,
+        avatar: user.avatar,
+        micOn: user.micOn,
+        camOn: user.camOn,
+        isScreenSharing: user.isScreenSharing,
+      };
 
       setParticipants((prev) => {
-        if (prev.some((p) => p.id === user.id)) return prev;
-        return [...prev, user];
+        if (prev.some((p) => p.id === mappedUser.id)) return prev;
+        return [...prev, mappedUser];
       });
 
-      // Initiate WebRTC call to the new user
-      if (user.peerId && user.peerId !== peer.id) {
-        callRemotePeer(user.peerId);
+      if (mappedUser.peerId && mappedUser.peerId !== peer.id) {
+        callRemotePeer(mappedUser.peerId);
       }
     });
 
@@ -350,11 +374,10 @@ export const useWebRTC = (
     newSocket.on(
       "user-disconnected",
       (socketId: string, disconnectedPeerId: string) => {
-        console.info(`[Socket.IO] User disconnected. Socket: ${socketId}`);
+        console.info(`[Socket.IO] Usuario desconectado. Socket: ${socketId}`);
 
         setParticipants((prev) => prev.filter((p) => p.id !== socketId));
 
-        // Destroy their WebRTC stream and connection
         if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
           callsRef.current[disconnectedPeerId].close();
           delete callsRef.current[disconnectedPeerId];
@@ -367,7 +390,7 @@ export const useWebRTC = (
     );
 
     newSocket.on("room-ended", () => {
-      console.warn("[Socket.IO] The host has ended the room for everyone.");
+      console.warn("[Socket.IO] El anfitrión ha finalizado la sala.");
       cleanup();
       if (onRoomEnded) onRoomEnded();
     });
