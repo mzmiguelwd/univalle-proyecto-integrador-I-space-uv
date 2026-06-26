@@ -1,4 +1,7 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
+import FocusTrap from "../Dashboard/Profile/FocusTrap.tsx";
+
+// INTERFACES
 
 interface LeaveModalProps {
   isOpen: boolean;
@@ -9,6 +12,8 @@ interface LeaveModalProps {
   onEndForAll: () => void;
 }
 
+// MAIN COMPONENT
+
 export default function LeaveModal({
   isOpen,
   isOwner,
@@ -16,57 +21,97 @@ export default function LeaveModal({
   onClose,
   onLeave,
   onEndForAll,
-}: LeaveModalProps) {
+}: Readonly<LeaveModalProps>) {
   if (!isOpen) return null;
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-      <div className="bg-[#1C1C1C] border border-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 bg-red-500/10 text-red-500 rounded-xl">
-            <AlertTriangle className="w-6 h-6" />
+    <dialog
+      open
+      aria-labelledby="leave-modal-title"
+      className="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center bg-transparent p-4"
+    >
+      {/* BACKDROP LAYER */}
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={isProcessing}
+        tabIndex={-1}
+        aria-label="Cerrar modal de confirmación"
+        className="fixed inset-0 h-full w-full cursor-default bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 focus:outline-none"
+      />
+
+      {/* MODAL CONTENT */}
+      <div className="relative z-10 w-full max-w-sm">
+        <FocusTrap isActive={isOpen} onEscape={onClose}>
+          <div className="w-full rounded-2xl border border-gray-800 bg-[#1C1C1C] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <header className="mb-4 flex items-center gap-3">
+              <div className="rounded-xl bg-red-500/10 p-3 text-red-500">
+                <AlertTriangle
+                  className="h-6 w-6 shrink-0"
+                  aria-hidden="true"
+                />
+              </div>
+              <h2
+                id="leave-modal-title"
+                className="text-lg font-bold text-white"
+              >
+                ¿Salir de la sala?
+              </h2>
+            </header>
+
+            <p className="mb-6 text-sm text-gray-400">
+              {isOwner
+                ? "Como anfitrión, puedes salir en silencio o finalizar la llamada para todos. El chat y la sala seguirán guardados."
+                : "Estás a punto de abandonar esta sesión de estudio."}
+            </p>
+
+            <div className="flex flex-col gap-3">
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={onEndForAll}
+                  disabled={isProcessing}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                >
+                  {isProcessing && (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span>
+                    {isProcessing
+                      ? "Desconectando..."
+                      : "Finalizar llamada para todos"}
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onLeave}
+                disabled={isProcessing}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 ${
+                  isOwner
+                    ? "bg-[#2A2A2A] text-white hover:bg-gray-700 focus-visible:ring-gray-400"
+                    : "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-400"
+                }`}
+              >
+                Solo salir de la llamada
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isProcessing}
+                className="mt-2 w-full rounded-xl border border-gray-700 bg-transparent px-4 py-3 font-medium text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
-          <h3 className="text-lg font-bold text-white">¿Salir de la sala?</h3>
-        </div>
-
-        <p className="text-sm text-gray-400 mb-6">
-          {isOwner
-            ? "Como anfitrión, puedes salir en silencio o finalizar la llamada para todos. El chat y la sala seguirán guardados."
-            : "Estás a punto de abandonar esta sesión de estudio."}
-        </p>
-
-        <div className="flex flex-col gap-3">
-          {isOwner && (
-            <button
-              onClick={onEndForAll}
-              disabled={isProcessing}
-              className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
-            >
-              {isProcessing
-                ? "Desconectando..."
-                : "Finalizar llamada para todos"}
-            </button>
-          )}
-          <button
-            onClick={onLeave}
-            disabled={isProcessing}
-            className={`w-full py-3 px-4 font-bold rounded-xl transition-colors ${
-              isOwner
-                ? "bg-[#2A2A2A] text-white hover:bg-gray-700"
-                : "bg-red-600 hover:bg-red-700 text-white"
-            }`}
-          >
-            Solo salir de la llamada
-          </button>
-          <button
-            onClick={onClose}
-            disabled={isProcessing}
-            className="w-full py-3 px-4 bg-transparent border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium rounded-xl transition-colors mt-2"
-          >
-            Cancelar
-          </button>
-        </div>
+        </FocusTrap>
       </div>
-    </div>
+    </dialog>
   );
 }

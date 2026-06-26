@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { auth } from "../../config/firebase";
-import { getUserProfile, type UserProfile } from "../../config/auth";
+import { auth } from "../../config/firebase.ts";
+import { getUserProfile, type UserProfile } from "../../config/auth.ts";
 import NavigationSidebar from "./NavigationSidebar.tsx";
-import { StudySession } from "./Home/StudySession.tsx";
+import StudySession from "./Home/StudySession.tsx";
+
+// MAIN COMPONENT
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -18,7 +20,7 @@ export default function Dashboard() {
         if (data) {
           setProfile(data);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error cargando perfil:", error);
       }
     };
@@ -26,8 +28,10 @@ export default function Dashboard() {
     loadUser();
   }, []);
 
+  // RENDER
+
   return (
-    <main className="min-h-screen bg-[#0f0f10] text-white flex w-full">
+    <main className="flex min-h-screen w-full bg-[#0f0f10] text-white">
       <NavigationSidebar activePage="Inicio" profile={profile} />
       <StudySession profile={profile} />
     </main>
