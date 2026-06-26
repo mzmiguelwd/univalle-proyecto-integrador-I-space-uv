@@ -246,6 +246,55 @@ export default function Room() {
     }
   };
 
+  // ── 🔍 DEPURACIÓN: OBSERVADOR DE ESTADO GLOBAL ──
+  useEffect(() => {
+    // Usamos console.groupCollapsed para no saturar la consola visualmente,
+    // pero permitiendo expandir la tabla para analizarla.
+    console.groupCollapsed("📊 [Debug] Estado de la Sala actualizado");
+
+    // Mapeamos el estado local y remoto en un formato tabular amigable
+    const tableData = [
+      {
+        Rol: "LOCAL (Tú)",
+        Nombre: profile?.name || "Usuario Local",
+        Socket_ID: socketRef.current?.id || "Pendiente...",
+        Micrófono: isMicrophoneOn ? "✅ ON" : "❌ OFF",
+        Cámara: isCameraOn ? "✅ ON" : "❌ OFF",
+        Pantalla: isScreenSharing ? "✅ ON" : "❌ OFF",
+      },
+      ...participants.map((p) => ({
+        Rol: "REMOTO",
+        Nombre: p.name,
+        Socket_ID: p.id,
+        Micrófono: p.micOn ? "✅ ON" : "❌ OFF",
+        Cámara: p.camOn ? "✅ ON" : "❌ OFF",
+        Pantalla: p.isScreenSharing ? "✅ ON" : "❌ OFF",
+      })),
+    ];
+
+    console.table(tableData);
+
+    // También imprimimos el conteo real de streams de video que WebRTC está recibiendo
+    console.debug(
+      "[Debug] Streams remotos activos en memoria:",
+      remoteStreams.length,
+    );
+    console.debug(
+      "Streams recibidos:",
+      remoteStreams.map((s) => `${s.type} de ${s.id}`),
+    );
+
+    console.groupEnd();
+  }, [
+    participants,
+    isMicrophoneOn,
+    isCameraOn,
+    isScreenSharing,
+    remoteStreams,
+    profile,
+    socketRef,
+  ]);
+
   // ── 5. CLEANUP & LEAVE HANDLERS ──
 
   const stopAllLocalHardware = useCallback(() => {
