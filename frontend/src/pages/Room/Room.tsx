@@ -43,6 +43,7 @@ export default function Room() {
   // HARDWARE REFS
   // Using refs to keep track of individual tracks without triggering unnecessary re-renders
   const localStreamRef = useRef<MediaStream | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -51,6 +52,17 @@ export default function Room() {
   useEffect(() => {
     screenStreamRef.current = screenStream;
   }, [screenStream]);
+
+  // Sincronizar stream de audio separado
+  useEffect(() => {
+    if (myStream) {
+      const audioTracks = myStream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        const audioStream = new MediaStream(audioTracks);
+        audioStreamRef.current = audioStream;
+      }
+    }
+  }, [myStream]);
 
   //  1. INITIALIZATION: LOAD PROFILE & ROOM DATA
   useEffect(() => {
@@ -110,21 +122,13 @@ export default function Room() {
   //  4. HARDWARE CONTROL HANDLERS (Mutex & Sync)
 
   const toggleMicrophone = async () => {
-    const currentAudioTracks = localStreamRef.current?.getAudioTracks() ?? [];
     const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
+    const currentAudioTracks = audioStreamRef.current?.getAudioTracks() ?? [];
 
     if (isMicrophoneOn) {
       currentAudioTracks.forEach((track) => {
         track.enabled = false;
-        track.stop();
       });
-      const nextStream =
-        currentVideoTracks.length > 0
-          ? new MediaStream([...currentVideoTracks])
-          : null;
-
-      localStreamRef.current = nextStream;
-      setMyStream(nextStream);
       setIsMicrophoneOn(false);
 
       console.info("[Hardware] Micrófono silenciado localmente.");
@@ -138,13 +142,14 @@ export default function Room() {
           video: false,
         });
         const newAudioTracks = audioStream.getAudioTracks();
-        const newStream = new MediaStream([
+        const combinedStream = new MediaStream([
           ...currentVideoTracks,
           ...newAudioTracks,
         ]);
 
-        localStreamRef.current = newStream;
-        setMyStream(newStream);
+        audioStreamRef.current = new MediaStream(newAudioTracks);
+        localStreamRef.current = combinedStream;
+        setMyStream(combinedStream);
         setIsMicrophoneOn(true);
 
         console.info("[Hardware] Micrófono encendido exitosamente.");
@@ -160,7 +165,7 @@ export default function Room() {
   };
 
   const toggleCamera = async () => {
-    const currentAudioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+    const currentAudioTracks = audioStreamRef.current?.getAudioTracks() ?? [];
     const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
 
     if (isCameraOn) {
@@ -222,6 +227,7 @@ export default function Room() {
       setScreenStream(null);
       setIsScreenSharing(false);
       if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+      updatePeerTracksCallback?.();
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -234,6 +240,7 @@ export default function Room() {
 
         setTimeout(() => {
           if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
+          updatePeerTracksCallback?.();
         }, 100);
 
         stream.getVideoTracks()[0].onended = () => {
@@ -241,6 +248,7 @@ export default function Room() {
           setScreenStream(null);
           socketRef.current?.emit("screen-share-stopped", { roomId });
           if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+          updatePeerTracksCallback?.();
         };
       } catch (err) {
         console.error("[Hardware] Error al compartir pantalla:", err);
