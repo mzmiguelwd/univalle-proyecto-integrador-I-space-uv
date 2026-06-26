@@ -188,11 +188,13 @@ export default function ControlsBar({
       {/* RIGHT: SIDEBAR TOGGLES & LEAVE */}
       <div className="flex flex-1 items-center justify-end gap-2 sm:gap-3">
         {/* CHAT TOGGLE */}
+        {/* CHAT TOGGLE (Visible solo en móviles) */}
         <button
           type="button"
           onClick={toggleChat}
           aria-label={isChatOpen ? "Cerrar chat" : "Abrir chat"}
-          className={`rounded-xl p-3 sm:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+          // 👇 Aquí agregamos "lg:hidden" al inicio de las clases
+          className={`lg:hidden rounded-xl p-3 sm:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
             isChatOpen
               ? "bg-sky-500 text-white hover:bg-sky-600 shadow-lg shadow-sky-500/20"
               : "border border-sky-900/50 bg-[#0A2E46] text-sky-400 hover:bg-[#0C3A5A]"
