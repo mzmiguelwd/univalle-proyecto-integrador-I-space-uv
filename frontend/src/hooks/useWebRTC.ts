@@ -2,11 +2,10 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import Peer, { type MediaConnection } from "peerjs";
 
-// ENVIRONMENT & CONFIGURATION
+// ── ENVIRONMENT & CONFIGURATION ───────────────────────────────────────
 
 const envSocketUrl = import.meta.env.VITE_SOCKET_SERVER_URL?.trim();
 
-// Safe global object check for SSR compatibility
 const defaultSocketUrl = import.meta.env.DEV
   ? "http://localhost:3000"
   : globalThis.window
@@ -15,37 +14,19 @@ const defaultSocketUrl = import.meta.env.DEV
 
 const SOCKET_SERVER_URL = envSocketUrl || defaultSocketUrl;
 
-if (import.meta.env.DEV && !envSocketUrl) {
-  console.info(
-    "[WebRTC] Desarrollo detectado. Apuntando el servidor de señalización a:",
-    SOCKET_SERVER_URL,
-  );
-}
-
 const url = new URL(SOCKET_SERVER_URL);
-
-// Dynamic port resolution for PeerJS
 let computedPort = 80;
-if (url.port) {
-  computedPort = Number.parseInt(url.port);
-} else if (url.protocol === "https:") {
-  computedPort = 443;
-}
+if (url.port) computedPort = Number.parseInt(url.port);
+else if (url.protocol === "https:") computedPort = 443;
 
 const PEERJS_CONFIG = {
   host: url.hostname,
   port: computedPort,
   path: "/peerjs",
   secure: url.protocol === "https:",
-  config: {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:global.stun.twilio.com:3478" },
-    ],
-  },
 };
 
-// TYPES & INTERFACES
+// ── TYPES & INTERFACES ────────────────────────────────────────────────
 
 export type RemoteStreamType = "camera" | "screen";
 
@@ -71,12 +52,8 @@ export interface CurrentUserPayload {
   avatar?: string | null;
 }
 
-// MAIN HOOK
+// ── MAIN HOOK ─────────────────────────────────────────────────────────
 
-/**
- * Custom Hook to manage WebRTC connections via PeerJS and Signaling via Socket.IO.
- * Handles the complexities of multiple peers, screen sharing, and media state sync.
- */
 export const useWebRTC = (
   roomId: string,
   localStream: MediaStream | null,
@@ -84,40 +61,31 @@ export const useWebRTC = (
   currentUser: CurrentUserPayload,
   onRoomEnded?: () => void,
 ) => {
-  // STATES
   const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
-  // Used as a dependency trigger to force UI re-renders when tracks change under the hood
   const [remoteTracksUpdate, setRemoteTracksUpdate] = useState(0);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
 
-  // REFS
   const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<Peer | null>(null);
-  // Keeps track of active PeerJS calls to avoid duplicates and allow cleanups
-  const callsRef = useRef<Record<string, MediaConnection>>({});
+
+  // DUAL CONNECTION ARCHITECTURE: We keep separate records for Camera and Screen calls
+  const mediaCallsRef = useRef<Record<string, MediaConnection>>({});
+  const screenCallsRef = useRef<Record<string, MediaConnection>>({});
 
   const localStreamRef = useRef<MediaStream | null>(localStream);
-  const screenStreamRef = useRef<MediaStream | null>(screenStream);
-  const participantsRef = useRef<Participant[]>([]);
 
-  // Referencias para los Dummy Tracks (Mantienen la conexión SDP viva cuando apagamos el hardware)
+  // Dummy Tracks for Media (Keeps the SDP connection alive even if hardware is off)
   const dummyAudioRef = useRef<MediaStreamTrack | null>(null);
   const dummyVideoRef = useRef<MediaStreamTrack | null>(null);
 
-  // Keep refs synced with React state for callbacks that run outside the render cycle
   useEffect(() => {
     localStreamRef.current = localStream;
-    screenStreamRef.current = screenStream;
-  }, [localStream, screenStream]);
+  }, [localStream]);
 
+  // ── DUMMY STREAMS INITIALIZATION ──
   useEffect(() => {
-    participantsRef.current = participants;
-  }, [participants]);
-
-  // ── INICIALIZACIÓN DE DUMMY STREAMS ──
-  useEffect(() => {
-    // 1. Crear un track de video falso (1x1 pixel negro)
+    // 1. Fake Video Track (1x1 black pixel)
     if (!dummyVideoRef.current) {
       const canvas = document.createElement("canvas");
       canvas.width = 1;
@@ -132,7 +100,7 @@ export const useWebRTC = (
       dummyVideoRef.current = dummyVideo;
     }
 
-    // 2. Crear un track de audio falso (Silencio total)
+    // 2. Fake Audio Track (Total silence)
     if (!dummyAudioRef.current) {
       try {
         const AudioContext =
@@ -146,39 +114,30 @@ export const useWebRTC = (
         dummyAudio.enabled = false;
         dummyAudioRef.current = dummyAudio;
       } catch (e) {
-        console.warn("[WebRTC] No se pudo crear el dummy audio context", e);
+        console.warn("[WebRTC] Failed to create dummy audio context", e);
       }
     }
   }, []);
 
-  // HELPERS
+  // ── HELPERS ──
 
   /**
-   * Garantiza que SIEMPRE se devuelva 1 track de audio y 1 de video.
-   * Si el usuario apagó su cámara o micrófono, usa los Dummy Tracks.
+   * Retrieves the current camera/mic stream, falling back to dummy tracks.
+   * NEVER includes the screen stream.
    */
-  const getCombinedStream = useCallback((): MediaStream => {
+  const getMediaStream = useCallback((): MediaStream => {
     const combined = new MediaStream();
 
-    // Priorizar Audio Real -> Audio Falso
     const realAudio = localStreamRef.current
       ?.getAudioTracks()
       .find((t) => t.readyState === "live");
     if (realAudio) combined.addTrack(realAudio);
     else if (dummyAudioRef.current) combined.addTrack(dummyAudioRef.current);
 
-    // Priorizar Pantalla -> Cámara Real -> Video Falso
-    const realScreen = screenStreamRef.current
-      ?.getVideoTracks()
-      .find((t) => t.readyState === "live");
     const realCamera = localStreamRef.current
       ?.getVideoTracks()
       .find((t) => t.readyState === "live");
-
-    if (realScreen) {
-      realScreen.contentHint = "detail";
-      combined.addTrack(realScreen);
-    } else if (realCamera) {
+    if (realCamera) {
       realCamera.contentHint = "motion";
       combined.addTrack(realCamera);
     } else if (dummyVideoRef.current) {
@@ -188,13 +147,13 @@ export const useWebRTC = (
     return combined;
   }, []);
 
-  /**
-   * Closes all connections and cleans up memory to prevent leaks when leaving the room.
-   */
   const cleanup = useCallback(() => {
-    console.info("[WebRTC] Limpiando conexiones...");
-    Object.values(callsRef.current).forEach((call) => call.close());
-    callsRef.current = {};
+    console.info("[WebRTC] Cleaning up all connections...");
+
+    Object.values(mediaCallsRef.current).forEach((call) => call.close());
+    Object.values(screenCallsRef.current).forEach((call) => call.close());
+    mediaCallsRef.current = {};
+    screenCallsRef.current = {};
 
     if (peerRef.current) {
       peerRef.current.disconnect();
@@ -213,15 +172,15 @@ export const useWebRTC = (
   }, []);
 
   /**
-   * SUSTITUYE LAS PISTAS "AL VUELO" USANDO LA API NATIVA.
-   * Nunca corta la llamada. Si prendes la cámara, cambia el cuadro negro por tu cámara en tiempo real.
+   * Dynamically swaps the Audio/Video tracks for the Media Connection ONLY.
+   * Leaves the Screen Share connection untouched.
    */
   const updatePeerTracks = useCallback(() => {
-    const combinedStream = getCombinedStream();
-    const newAudioTrack = combinedStream.getAudioTracks()[0];
-    const newVideoTrack = combinedStream.getVideoTracks()[0];
+    const mediaStream = getMediaStream();
+    const newAudioTrack = mediaStream.getAudioTracks()[0];
+    const newVideoTrack = mediaStream.getVideoTracks()[0];
 
-    Object.values(callsRef.current).forEach((call) => {
+    Object.values(mediaCallsRef.current).forEach((call) => {
       const pc = call.peerConnection;
       if (!pc) return;
 
@@ -231,25 +190,20 @@ export const useWebRTC = (
             sender
               .replaceTrack(newAudioTrack)
               .catch((e) => console.warn("[WebRTC] Error swap audio", e));
-            console.debug("[WebRTC] Track de audio actualizado en vivo.");
           }
         } else if (sender.track?.kind === "video" && newVideoTrack) {
           if (sender.track !== newVideoTrack) {
             sender
               .replaceTrack(newVideoTrack)
               .catch((e) => console.warn("[WebRTC] Error swap video", e));
-            console.debug("[WebRTC] Track de video actualizado en vivo.");
           }
         }
       });
     });
 
     setRemoteTracksUpdate((prev) => prev + 1);
-  }, [getCombinedStream]);
+  }, [getMediaStream]);
 
-  /**
-   * Broadcasts the user's microphone and camera hardware state to the room for UI updates.
-   */
   const emitMediaState = useCallback(
     (microphoneOn: boolean, cameraOn: boolean) => {
       socketRef.current?.emit("media-state", {
@@ -261,86 +215,24 @@ export const useWebRTC = (
     [roomId],
   );
 
-  const resolveStreamType = useCallback(
-    (peerId: string, stream: MediaStream): RemoteStreamType => {
-      const participant = participantsRef.current.find(
-        (p) => p.peerId === peerId || p.id === peerId,
-      );
-
-      if (participant?.isScreenSharing) return "screen";
-
-      const videoTrack = stream.getVideoTracks()[0];
-      const label = videoTrack?.label?.toLowerCase() ?? "";
-      const contentHint = videoTrack?.contentHint?.toLowerCase() ?? "";
-
-      if (contentHint.includes("detail") || label.includes("screen")) {
-        return "screen";
-      }
-
-      return "camera";
-    },
-    [],
-  );
-
-  const upsertRemoteStream = useCallback(
-    (peerId: string, stream: MediaStream) => {
-      const type = resolveStreamType(peerId, stream);
-
-      setRemoteStreams((prev) => {
-        const filtered = prev.filter((s) => s.id !== peerId);
-        return [...filtered, { id: peerId, stream, type }];
-      });
-    },
-    [resolveStreamType],
-  );
-
-  const syncScreenShareStatus = useCallback((socketId: string, isSharing: boolean) => {
-    setParticipants((prev) =>
-      prev.map((participant) =>
-        participant.id === socketId
-          ? { ...participant, isScreenSharing: isSharing }
-          : participant,
-      ),
-    );
-
-    const participant = participantsRef.current.find((p) => p.id === socketId);
-    if (participant?.peerId) {
-      setRemoteStreams((prev) =>
-        prev.map((stream) =>
-          stream.id === participant.peerId
-            ? { ...stream, type: isSharing ? "screen" : "camera" }
-            : stream,
-        ),
-      );
-    }
-  }, []);
-
-  // CORE INITIALIZATION (MOUNT)
+  // ── CORE INITIALIZATION (MOUNT) ──
 
   useEffect(() => {
-    if (!roomId || !currentUser.uid) {
-      console.warn(
-        "[WebRTC] Missing roomId or currentUser UID. Skipping initialization.",
-      );
-      return;
-    }
+    if (!roomId || !currentUser.uid) return;
 
-    // 1. Initialize Socket.IO
-    const newSocket = io(SOCKET_SERVER_URL, {});
+    const newSocket = io(SOCKET_SERVER_URL);
     socketRef.current = newSocket;
 
-    // React strict rule: only update state in response to external events
     newSocket.on("connect", () => {
       setSocket(newSocket);
-      console.info(`[Socket.IO] Conectado con ID: ${newSocket.id}`);
+      console.info(`[Socket.IO] Connected with ID: ${newSocket.id}`);
     });
 
-    // 2. Initialize PeerJS
     const peer = new Peer(PEERJS_CONFIG);
     peerRef.current = peer;
 
     peer.on("open", (myPeerId) => {
-      console.info(`[PeerJS] PeerID local: ${myPeerId}`);
+      console.info(`[PeerJS] Local PeerID: ${myPeerId}`);
       newSocket.emit("join-room", {
         roomId,
         user: {
@@ -352,56 +244,115 @@ export const useWebRTC = (
       });
     });
 
-    // PEERJS EVENT LISTENERS
-
     const callRemotePeer = (targetPeerId: string) => {
-      if (!targetPeerId || callsRef.current[targetPeerId]) return;
+      if (!targetPeerId || mediaCallsRef.current[targetPeerId]) return;
 
-      const combinedStream = getCombinedStream(); // Siempre tiene 1A/1V
+      // 1. Call for Camera/Mic (Metadata specifies 'camera')
+      const mediaStream = getMediaStream();
       console.debug(
-        `[WebRTC] Estableciendo conexión inicial con: ${targetPeerId}...`,
+        `[WebRTC] Establishing Media Call with: ${targetPeerId}...`,
       );
 
-      const call = peer.call(targetPeerId, combinedStream);
-      callsRef.current[targetPeerId] = call;
-
-      call.on("stream", (userVideoStream) => {
-        upsertRemoteStream(call.peer, userVideoStream);
+      const mediaCall = peer.call(targetPeerId, mediaStream, {
+        metadata: { type: "camera" },
       });
+      mediaCallsRef.current[targetPeerId] = mediaCall;
+
+      mediaCall.on("stream", (remoteVideoStream) => {
+        setRemoteStreams((prev) => {
+          // Remove old camera stream if exists to avoid duplicates
+          const filtered = prev.filter(
+            (s) => !(s.id === mediaCall.peer && s.type === "camera"),
+          );
+          return [
+            ...filtered,
+            { id: mediaCall.peer, stream: remoteVideoStream, type: "camera" },
+          ];
+        });
+      });
+
+      // If we are currently sharing screen, initiate a second call immediately
+      if (screenStream) {
+        console.debug(
+          `[WebRTC] Also establishing Screen Call with: ${targetPeerId}...`,
+        );
+        const screenCall = peer.call(targetPeerId, screenStream, {
+          metadata: { type: "screen" },
+        });
+        screenCallsRef.current[targetPeerId] = screenCall;
+      }
     };
 
-    // When someone else calls US
+    // ── ANSWERING INCOMING CALLS ──
     peer.on("call", (incomingCall) => {
-      console.info(`[WebRTC] Llamada entrante de: ${incomingCall.peer}`);
-
-      // Solo cerramos llamadas si hay una duplicación por reconexión de red
-      if (callsRef.current[incomingCall.peer]) {
-        callsRef.current[incomingCall.peer].close();
-      }
-
-      const answerStream = getCombinedStream(); // Siempre tiene 1A/1V
-      incomingCall.answer(answerStream);
-
-      incomingCall.on("stream", (userVideoStream) => {
-        upsertRemoteStream(incomingCall.peer, userVideoStream);
-      });
-
-      callsRef.current[incomingCall.peer] = incomingCall;
-    });
-
-    peer.on("error", (err) => {
-      console.error("[PeerJS] Error crítico:", err);
-    });
-
-    // SOCKET.IO EVENT LISTENERS
-
-    // Late Joiner resolution: Receiving the current state of the room
-    newSocket.on("room-users", (users: any[]) => {
+      const callType = incomingCall.metadata?.type || "camera";
       console.info(
-        `[Socket.IO] Sincronizando estado: ${users.length} participantes existentes.`,
+        `[WebRTC] Incoming ${callType.toUpperCase()} call from: ${incomingCall.peer}`,
       );
+
+      if (callType === "camera") {
+        if (mediaCallsRef.current[incomingCall.peer]) {
+          mediaCallsRef.current[incomingCall.peer].close();
+        }
+
+        // Answer Media Call with our Camera/Mic
+        incomingCall.answer(getMediaStream());
+
+        incomingCall.on("stream", (remoteVideoStream) => {
+          setRemoteStreams((prev) => {
+            const filtered = prev.filter(
+              (s) => !(s.id === incomingCall.peer && s.type === "camera"),
+            );
+            return [
+              ...filtered,
+              {
+                id: incomingCall.peer,
+                stream: remoteVideoStream,
+                type: "camera",
+              },
+            ];
+          });
+        });
+
+        mediaCallsRef.current[incomingCall.peer] = incomingCall;
+      } else if (callType === "screen") {
+        // Answer Screen Call without sending anything back (One-way stream)
+        incomingCall.answer();
+
+        incomingCall.on("stream", (remoteScreenStream) => {
+          setRemoteStreams((prev) => {
+            const filtered = prev.filter(
+              (s) => !(s.id === incomingCall.peer && s.type === "screen"),
+            );
+            return [
+              ...filtered,
+              {
+                id: incomingCall.peer,
+                stream: remoteScreenStream,
+                type: "screen",
+              },
+            ];
+          });
+        });
+
+        incomingCall.on("close", () => {
+          console.info(`[WebRTC] Screen call from ${incomingCall.peer} ended.`);
+          setRemoteStreams((prev) =>
+            prev.filter(
+              (s) => !(s.id === incomingCall.peer && s.type === "screen"),
+            ),
+          );
+        });
+
+        screenCallsRef.current[incomingCall.peer] = incomingCall;
+      }
+    });
+
+    // ── SOCKET.IO EVENT LISTENERS ──
+
+    newSocket.on("room-users", (users: any[]) => {
       const mappedUsers: Participant[] = users.map((u) => ({
-        id: u.socketId, // <- SOLUCIÓN AL BUG DEL FANTASMA
+        id: u.socketId,
         peerId: u.peerId,
         name: u.name,
         avatar: u.avatar,
@@ -413,11 +364,8 @@ export const useWebRTC = (
     });
 
     newSocket.on("user-connected", (user: any) => {
-      console.info(
-        `[Socket.IO] Usuario unido: ${user.name} (Socket: ${user.socketId})`,
-      );
       const mappedUser: Participant = {
-        id: user.socketId, // <- SOLUCIÓN AL BUG DEL FANTASMA
+        id: user.socketId,
         peerId: user.peerId,
         name: user.name,
         avatar: user.avatar,
@@ -442,24 +390,21 @@ export const useWebRTC = (
       );
     });
 
-    newSocket.on("screen-share-started", ({ socketId }) => {
-      syncScreenShareStatus(socketId, true);
-    });
-
-    newSocket.on("screen-share-stopped", ({ socketId }) => {
-      syncScreenShareStatus(socketId, false);
-    });
-
     newSocket.on(
       "user-disconnected",
       (socketId: string, disconnectedPeerId: string) => {
-        console.info(`[Socket.IO] Usuario desconectado. Socket: ${socketId}`);
-
         setParticipants((prev) => prev.filter((p) => p.id !== socketId));
 
-        if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
-          callsRef.current[disconnectedPeerId].close();
-          delete callsRef.current[disconnectedPeerId];
+        // Cleanup BOTH calls if they exist
+        if (disconnectedPeerId) {
+          if (mediaCallsRef.current[disconnectedPeerId]) {
+            mediaCallsRef.current[disconnectedPeerId].close();
+            delete mediaCallsRef.current[disconnectedPeerId];
+          }
+          if (screenCallsRef.current[disconnectedPeerId]) {
+            screenCallsRef.current[disconnectedPeerId].close();
+            delete screenCallsRef.current[disconnectedPeerId];
+          }
           setRemoteStreams((prev) =>
             prev.filter((s) => s.id !== disconnectedPeerId),
           );
@@ -468,23 +413,56 @@ export const useWebRTC = (
     );
 
     newSocket.on("room-ended", () => {
-      console.warn("[Socket.IO] El anfitrión ha finalizado la sala.");
       cleanup();
       if (onRoomEnded) onRoomEnded();
     });
 
-    return () => {
-      cleanup();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, currentUser.uid]);
+    return () => cleanup();
+  }, [roomId, currentUser.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DYNAMIC TRACK UPDATER
-
-  // This triggers renegotiation if the user toggles their hardware
+  // ── DYNAMIC TRACK UPDATER (CAMERA/MIC ONLY) ──
   useEffect(() => {
     updatePeerTracks();
-  }, [localStream, screenStream, updatePeerTracks]);
+  }, [localStream, updatePeerTracks]);
+
+  // ── SCREEN SHARE BROADCASTER ──
+  // Reacts to local screen share state and manages the secondary call
+  useEffect(() => {
+    if (!peerRef.current) return;
+
+    if (screenStream) {
+      console.info(
+        "[WebRTC] Local screen share started. Initiating screen connections...",
+      );
+
+      // Security measure: Ensure absolutely NO audio goes through the screen stream
+      screenStream.getAudioTracks().forEach((track) => {
+        track.enabled = false;
+        track.stop();
+        screenStream.removeTrack(track);
+      });
+
+      // Call everyone we are currently connected to
+      Object.keys(mediaCallsRef.current).forEach((targetPeerId) => {
+        if (!screenCallsRef.current[targetPeerId]) {
+          console.debug(`[WebRTC] Dialing ${targetPeerId} for screen share...`);
+          const screenCall = peerRef.current!.call(targetPeerId, screenStream, {
+            metadata: { type: "screen" },
+          });
+          screenCallsRef.current[targetPeerId] = screenCall;
+        }
+      });
+    } else {
+      // Screen sharing stopped
+      if (Object.keys(screenCallsRef.current).length > 0) {
+        console.info(
+          "[WebRTC] Local screen share stopped. Dropping screen connections...",
+        );
+        Object.values(screenCallsRef.current).forEach((call) => call.close());
+        screenCallsRef.current = {};
+      }
+    }
+  }, [screenStream]);
 
   return {
     remoteStreams,
