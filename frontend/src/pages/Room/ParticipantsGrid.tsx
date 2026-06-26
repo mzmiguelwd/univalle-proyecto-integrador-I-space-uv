@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useState } from "react";
 import { VideoOff, MicOff, Pin } from "lucide-react";
 
 // INTERFACES
@@ -8,11 +8,13 @@ export interface Participant {
   name: string;
   avatar?: string | null;
   micOn?: boolean;
+  camOn?: boolean;
   peerId?: string;
+  isScreenSharing?: boolean;
 }
 
 export interface RemoteStream {
-  id: string;
+  peerId: string;
   stream: MediaStream;
 }
 
@@ -29,7 +31,6 @@ export interface ParticipantsGridProps {
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   participants: Participant[];
   remoteStreams: RemoteStream[];
-  remoteTracksUpdate: number;
   pinnedUserId: string | null;
   onPinUser: (id: string) => void;
 }
@@ -53,9 +54,6 @@ const AVATARS: Record<string, string> = {
 
 // HELPERS
 
-/**
- * Calculates the grid layout columns based on the total number of users.
- */
 function getGridCols(totalParticipants: number): string {
   if (totalParticipants <= 1) return "grid-cols-1";
   if (totalParticipants <= 4) return "grid-cols-2";
@@ -67,12 +65,9 @@ function getGridCols(totalParticipants: number): string {
 interface ParticipantAvatarProps {
   name: string;
   avatar?: string | null;
-  sizeClass?: string; // Changed from 'size' to 'sizeClass' to support Tailwind's compiler
+  sizeClass?: string;
 }
 
-/**
- * Renders the user's avatar based on their profile settings (URL, Emoji, or Initial).
- */
 function ParticipantAvatar({
   name,
   avatar,
@@ -108,22 +103,68 @@ function ParticipantAvatar({
 interface RemoteVideoCardProps {
   stream: MediaStream;
   participant: Participant;
+  /**
+   * FIX #9: Callback para notificar al padre cuando el track de video
+   * termina, de modo que pueda mostrar el AvatarCard en su lugar.
+   */
+  onVideoEnded: () => void;
 }
 
 /**
- * Renders the video feed for a remote participant.
+ * FIX #9: RemoteVideoCard ahora observa el estado real de los tracks
+ * para detectar cuando la cámara remota se apaga, incluso si el stream
+ * permanece en el DOM. Esto elimina el efecto de "cámara congelada".
  */
 function RemoteVideoCard({
   stream,
   participant,
+  onVideoEnded,
 }: Readonly<RemoteVideoCardProps>) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    videoEl.srcObject = stream;
+
+    // Escuchar el evento ended en cada video track
+    const videoTracks = stream.getVideoTracks();
+    const handleTrackEnded = () => {
+      // Verificar si TODOS los video tracks terminaron
+      const allEnded = stream
+        .getVideoTracks()
+        .every((t) => t.readyState === "ended");
+      if (allEnded) {
+        onVideoEnded();
+      }
+    };
+
+    for (const track of videoTracks) {
+      track.addEventListener("ended", handleTrackEnded);
     }
-  }, [stream]);
+
+    // También escuchar el evento mute del track (cuando se deshabilita)
+    const handleTrackMute = () => {
+      const allMuted = stream.getVideoTracks().every((t) => t.muted);
+      if (allMuted) {
+        onVideoEnded();
+      }
+    };
+
+    for (const track of videoTracks) {
+      track.addEventListener("mute", handleTrackMute);
+    }
+
+    return () => {
+      for (const track of videoTracks) {
+        track.removeEventListener("ended", handleTrackEnded);
+        track.removeEventListener("mute", handleTrackMute);
+      }
+      // Limpiar srcObject para liberar memoria de la MediaStream
+      videoEl.srcObject = null;
+    };
+  }, [stream, onVideoEnded]);
 
   return (
     <div className="relative h-full w-full bg-black">
@@ -135,12 +176,10 @@ function RemoteVideoCard({
         className="h-full w-full rounded-xl object-cover"
       />
 
-      {/* NAME TAG */}
       <div className="absolute bottom-1.5 left-2 max-w-[80%] truncate rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-gray-200">
         {participant.name.split(" ")[0]}
       </div>
 
-      {/* STATUS ICON */}
       <div className="absolute bottom-1.5 right-2 flex gap-1">
         {participant.micOn === false && (
           <div className="rounded-full bg-red-600/90 p-0.5">
@@ -160,9 +199,6 @@ interface AvatarCardProps {
   statusText?: string;
 }
 
-/**
- * Renders a fallback UI when the user's camera is turned off.
- */
 function AvatarCard({
   name,
   avatar,
@@ -204,11 +240,105 @@ function AvatarCard({
   );
 }
 
+/**
+ * Wrapper de tarjeta remota que gestiona el estado de video activo/inactivo
+ * de forma local para evitar re-renders globales en el grid completo.
+ */
+interface RemoteParticipantCardProps {
+  participant: Participant;
+  remoteStream: RemoteStream | undefined;
+  isPinned: boolean;
+  baseCardStyles: string;
+  cardSizeClass: string;
+  cardMinHeight: number;
+  onPin: () => void;
+}
+
+function RemoteParticipantCard({
+  participant,
+  remoteStream,
+  isPinned,
+  baseCardStyles,
+  cardSizeClass,
+  cardMinHeight,
+  onPin,
+}: Readonly<RemoteParticipantCardProps>) {
+  /**
+   * FIX #9: Estado local de video activo.
+   * Se inicializa según el estado del socket (camOn) y se actualiza
+   * cuando el track del stream termina realmente.
+   */
+  const [hasActiveVideo, setHasActiveVideo] = useState<boolean>(() => {
+    if (!remoteStream) return false;
+    return remoteStream.stream
+      .getVideoTracks()
+      .some((t) => t.readyState === "live" && !t.muted);
+  });
+
+  // Sincronizar con cambios externos (nuevo stream, stream removido)
+  useEffect(() => {
+    if (!remoteStream) {
+      setHasActiveVideo(false);
+      return;
+    }
+
+    const videoTracks = remoteStream.stream.getVideoTracks();
+    const isActive =
+      videoTracks.length > 0 &&
+      videoTracks.some((t) => t.readyState === "live" && !t.muted);
+
+    setHasActiveVideo(isActive);
+  }, [remoteStream]);
+
+  // También sincronizar con el estado camOn que llega del socket
+  useEffect(() => {
+    if (participant.camOn === false) {
+      setHasActiveVideo(false);
+    }
+  }, [participant.camOn]);
+
+  const getPinStyles = (pinned: boolean) =>
+    pinned
+      ? "border-sky-500 scale-[0.98] ring-2 ring-sky-500/50"
+      : "border-gray-800 bg-[#1E1E1E]";
+
+  return (
+    <button
+      key={participant.id}
+      type="button"
+      onClick={onPin}
+      className={`block w-full text-left ${baseCardStyles} ${getPinStyles(isPinned)} ${cardSizeClass}`}
+      style={{ minHeight: cardMinHeight }}
+      aria-label={
+        isPinned
+          ? `Desfijar video de ${participant.name}`
+          : `Fijar video de ${participant.name}`
+      }
+    >
+      {hasActiveVideo && remoteStream ? (
+        <RemoteVideoCard
+          stream={remoteStream.stream}
+          participant={participant}
+          onVideoEnded={() => setHasActiveVideo(false)}
+        />
+      ) : (
+        <AvatarCard
+          name={participant.name}
+          avatar={participant.avatar}
+          micOn={participant.micOn}
+          statusText={remoteStream ? undefined : "Conectando..."}
+        />
+      )}
+    </button>
+  );
+}
+
 // MAIN COMPONENT
 
 /**
- * Displays a dynamic grid of all participants in the room.
- * Allows clicking on a participant's card to pin their video to the main stage.
+ * FIX #9: Se eliminó remoteTracksUpdate como prop.
+ * El estado de video activo/inactivo ahora se maneja localmente
+ * en cada RemoteParticipantCard, sin necesidad de forzar re-renders globales.
  */
 export default function ParticipantsGrid({
   profile,
@@ -218,32 +348,12 @@ export default function ParticipantsGrid({
   localVideoRef,
   participants,
   remoteStreams,
-  remoteTracksUpdate,
   pinnedUserId,
   onPinUser,
 }: Readonly<ParticipantsGridProps>) {
-  const total = participants.length + 1; // +1 includes the local user
+  const total = participants.length + 1;
   const isSingleParticipant = total === 1;
 
-  // Recalculate video states when remoteTracksUpdate changes
-  // This ensures UI updates when track replacements occur
-  const remoteVideoStates = useMemo(() => {
-    const states: Record<string, boolean> = {};
-    participants.forEach((participant) => {
-      const streamKey = participant.peerId || participant.id;
-      const remoteVideo = remoteStreams.find((s) => s.id === streamKey);
-
-      states[streamKey] = !!remoteVideo?.stream
-        .getVideoTracks()
-        .some((track) => track.readyState === "live" && track.enabled);
-    });
-    return states;
-    // We intentionally include remoteTracksUpdate to force re-evaluation
-    // when mutable MediaStream tracks change state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participants, remoteStreams, remoteTracksUpdate]);
-
-  // Base classes for video cards (handling the "Pin" interactive state)
   const baseCardStyles = `relative overflow-hidden rounded-xl border shadow-sm transition-all duration-200 cursor-pointer hover:border-sky-500/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`;
   const getPinStyles = (isPinned: boolean) =>
     isPinned
@@ -263,10 +373,10 @@ export default function ParticipantsGrid({
 
   return (
     <div className="flex shrink-0 flex-col">
-      {/*  ROOM STATS */}
+      {/* ROOM STATS */}
       <div className="mb-2 flex items-center justify-between px-1 text-xs text-gray-400">
         <p>
-          {total} participante{total === 1 ? "" : "s"}
+          {total} pparticipante{total === 1 ? "" : "s"}
         </p>
 
         {pinnedUserId && (
@@ -294,8 +404,6 @@ export default function ParticipantsGrid({
             pinnedUserId === "local" ? "Desfijar mi video" : "Fijar mi video"
           }
         >
-          {/* ACTIVE LOCAL VIDEO */}
-          {}
           <video
             ref={localVideoRef}
             autoPlay
@@ -306,7 +414,6 @@ export default function ParticipantsGrid({
             }`}
           />
 
-          {/* INACTIVE LOCAL VIDEO (AVATAR) */}
           {!isCameraOn && (
             <AvatarCard
               name={profile.name || "Tú"}
@@ -316,7 +423,6 @@ export default function ParticipantsGrid({
             />
           )}
 
-          {/* FLOATING BADGES FOR ACTIVE VIDEO */}
           {isCameraOn && (
             <>
               <div className="absolute left-2 top-1.5 rounded bg-sky-600/80 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm">
@@ -339,40 +445,22 @@ export default function ParticipantsGrid({
 
         {/* REMOTE PARTICIPANTS CARDS */}
         {participants.map((participant) => {
-          // Resolve the correct ID used for streaming (PeerJS ID)
           const streamKey = participant.peerId || participant.id;
-          const remoteVideo = remoteStreams.find(
-            (stream) => stream.id === streamKey,
+          const remoteStream = remoteStreams.find(
+            (s) => s.peerId === streamKey,
           );
-          const hasActiveVideo = remoteVideoStates[streamKey] || false;
 
           return (
-            <button
+            <RemoteParticipantCard
               key={participant.id}
-              type="button"
-              onClick={() => onPinUser(streamKey)}
-              className={`block w-full text-left ${baseCardStyles} ${getPinStyles(pinnedUserId === streamKey)} ${cardSizeClass}`}
-              style={{ minHeight: cardMinHeight }}
-              aria-label={
-                pinnedUserId === streamKey
-                  ? `Desfijar video de ${participant.name}`
-                  : `Fijar video de ${participant.name}`
-              }
-            >
-              {hasActiveVideo && remoteVideo ? (
-                <RemoteVideoCard
-                  stream={remoteVideo.stream}
-                  participant={participant}
-                />
-              ) : (
-                <AvatarCard
-                  name={participant.name}
-                  avatar={participant.avatar}
-                  micOn={participant.micOn}
-                  statusText="Conectando..."
-                />
-              )}
-            </button>
+              participant={participant}
+              remoteStream={remoteStream}
+              isPinned={pinnedUserId === streamKey}
+              baseCardStyles={baseCardStyles}
+              cardSizeClass={cardSizeClass}
+              cardMinHeight={cardMinHeight}
+              onPin={() => onPinUser(streamKey)}
+            />
           );
         })}
       </div>

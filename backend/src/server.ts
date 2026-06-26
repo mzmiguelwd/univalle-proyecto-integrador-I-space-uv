@@ -21,6 +21,10 @@ export interface UserPayload {
   name: string;
   avatar: string | null;
   peerId: string;
+  // FIX #8: 'uid' era enviado por el cliente pero no declarado aquí.
+  // Se añade como opcional para no romper el contrato del tipo pero
+  // permitir que el cliente lo envíe sin errores de TypeScript.
+  uid?: string;
 }
 
 export interface SocketData extends UserPayload, UserMediaState {
@@ -226,6 +230,8 @@ io.on("connection", (socket) => {
 
   socket.on("screen-share-started", ({ roomId }) => {
     socket.data.isScreenSharing = true;
+    // FIX #10: Emitir socketId explícito para que el cliente pueda
+    // mapear el evento al participante correcto en su estado local
     socket.to(roomId).emit("screen-share-started", { socketId: socket.id });
   });
 
