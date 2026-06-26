@@ -36,7 +36,6 @@ export default function NavigationSidebar({
   // DERIVED STATE
 
   const displayName = profile?.name || "Usuario";
-  const userRole = profile?.role || "Estudiante";
 
   const initials = displayName
     .split(" ")
@@ -88,6 +87,7 @@ export default function NavigationSidebar({
       <div className="space-y-6">
         <button
           type="button"
+          onClick={() => navigate("/create-room")}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-300 px-4 py-3 text-sm font-semibold text-zinc-950 transition-colors duration-200 hover:bg-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161617]"
         >
           <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -112,9 +112,9 @@ export default function NavigationSidebar({
             </p>
             <p
               className="truncate text-[10px] uppercase tracking-wider text-zinc-500"
-              title={userRole}
+              title={"Estudiante"}
             >
-              {userRole}
+              {"Estudiante"}
             </p>
           </div>
         </div>

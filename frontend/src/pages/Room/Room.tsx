@@ -52,12 +52,14 @@ export default function Room() {
       if (!roomId || !auth.currentUser) return;
 
       try {
-        // Load profile
+        // Load user profile
         const userData = await getUserProfile(auth.currentUser.uid);
         if (userData) setProfile(userData);
 
         // Verify if the current user is the owner of the room
-        const roomDoc = await getDoc(doc(db, "rooms", roomId));
+        const roomRef = doc(db, "rooms", roomId);
+        const roomDoc = await getDoc(roomRef);
+
         if (
           roomDoc.exists() &&
           roomDoc.data().ownerId === auth.currentUser.uid
@@ -93,7 +95,7 @@ export default function Room() {
     remoteTracksUpdate,
     participants,
     socketRef,
-    cleanupPeerConnections,
+    cleanup,
     emitMediaState,
     updatePeerTracksCallback,
   } = useWebRTC(
@@ -302,6 +304,7 @@ export default function Room() {
     myStream?.getTracks().forEach((track) => track.stop());
     screenStream?.getTracks().forEach((track) => track.stop());
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
+
     setMyStream(null);
     setScreenStream(null);
     console.info("Todos los streams locales han sido detenidos.");
@@ -314,7 +317,7 @@ export default function Room() {
 
   const handleLeaveOnly = () => {
     stopAllStreams();
-    cleanupPeerConnections();
+    cleanup();
     navigate("/dashboard");
   };
 
@@ -324,11 +327,12 @@ export default function Room() {
 
     try {
       socketRef.current?.emit("end-room", { roomId });
+
       stopAllStreams();
-      cleanupPeerConnections();
+      cleanup();
       navigate("/dashboard");
     } catch (error: unknown) {
-      console.error("Error finalizando la llamada para todos:", error);
+      console.error("Error vaciando la llamada:", error);
       setIsProcessing(false);
     }
   };

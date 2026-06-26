@@ -21,7 +21,7 @@ const DesktopHeroPanel = () => (
     className="hidden lg:flex lg:w-1/2 relative bg-cover bg-center"
     style={{ backgroundImage: "url('/Study-focus.jpeg')" }}
   >
-    <div className="absolute inset-0 bg-gradient-to-br from-[#0d0f14]/75 via-[#0d0f14]/45 to-transparent" />
+    <div className="absolute inset-0 bg-linear-to-br from-[#0d0f14]/75 via-[#0d0f14]/45 to-transparent" />
     <div className="relative z-10 flex flex-col justify-between p-10 w-full">
       <h1 className="text-3xl font-bold text-[#5ab4e8] tracking-tight font-serif select-none">
         Space UV
@@ -36,7 +36,7 @@ const DesktopHeroPanel = () => (
 const MobileHeroPanel = () => (
   <div
     className="lg:hidden relative rounded-2xl overflow-hidden mb-8 h-32 sm:h-40 bg-cover bg-center"
-    style={{ backgroundImage: "url('/Study-focus.jpeg')" }}
+    style={{ backgroundImage: "url('/study-focus.jpeg')" }}
   >
     <div className="absolute inset-0 bg-[#0d0f14]/60" />
     <div className="relative z-10 flex items-center justify-center h-full">
