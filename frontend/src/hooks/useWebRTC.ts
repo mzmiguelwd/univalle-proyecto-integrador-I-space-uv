@@ -99,6 +99,7 @@ export const useWebRTC = (
 
   const localStreamRef = useRef<MediaStream | null>(localStream);
   const screenStreamRef = useRef<MediaStream | null>(screenStream);
+  const participantsRef = useRef<Participant[]>([]);
 
   // Referencias para los Dummy Tracks (Mantienen la conexión SDP viva cuando apagamos el hardware)
   const dummyAudioRef = useRef<MediaStreamTrack | null>(null);
@@ -109,6 +110,10 @@ export const useWebRTC = (
     localStreamRef.current = localStream;
     screenStreamRef.current = screenStream;
   }, [localStream, screenStream]);
+
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   // ── INICIALIZACIÓN DE DUMMY STREAMS ──
   useEffect(() => {
@@ -256,6 +261,60 @@ export const useWebRTC = (
     [roomId],
   );
 
+  const resolveStreamType = useCallback(
+    (peerId: string, stream: MediaStream): RemoteStreamType => {
+      const participant = participantsRef.current.find(
+        (p) => p.peerId === peerId || p.id === peerId,
+      );
+
+      if (participant?.isScreenSharing) return "screen";
+
+      const videoTrack = stream.getVideoTracks()[0];
+      const label = videoTrack?.label?.toLowerCase() ?? "";
+      const contentHint = videoTrack?.contentHint?.toLowerCase() ?? "";
+
+      if (contentHint.includes("detail") || label.includes("screen")) {
+        return "screen";
+      }
+
+      return "camera";
+    },
+    [],
+  );
+
+  const upsertRemoteStream = useCallback(
+    (peerId: string, stream: MediaStream) => {
+      const type = resolveStreamType(peerId, stream);
+
+      setRemoteStreams((prev) => {
+        const filtered = prev.filter((s) => s.id !== peerId);
+        return [...filtered, { id: peerId, stream, type }];
+      });
+    },
+    [resolveStreamType],
+  );
+
+  const syncScreenShareStatus = useCallback((socketId: string, isSharing: boolean) => {
+    setParticipants((prev) =>
+      prev.map((participant) =>
+        participant.id === socketId
+          ? { ...participant, isScreenSharing: isSharing }
+          : participant,
+      ),
+    );
+
+    const participant = participantsRef.current.find((p) => p.id === socketId);
+    if (participant?.peerId) {
+      setRemoteStreams((prev) =>
+        prev.map((stream) =>
+          stream.id === participant.peerId
+            ? { ...stream, type: isSharing ? "screen" : "camera" }
+            : stream,
+        ),
+      );
+    }
+  }, []);
+
   // CORE INITIALIZATION (MOUNT)
 
   useEffect(() => {
@@ -307,13 +366,7 @@ export const useWebRTC = (
       callsRef.current[targetPeerId] = call;
 
       call.on("stream", (userVideoStream) => {
-        setRemoteStreams((prev) => {
-          if (prev.some((s) => s.id === call.peer)) return prev;
-          return [
-            ...prev,
-            { id: call.peer, stream: userVideoStream, type: "camera" },
-          ];
-        });
+        upsertRemoteStream(call.peer, userVideoStream);
       });
     };
 
@@ -330,13 +383,7 @@ export const useWebRTC = (
       incomingCall.answer(answerStream);
 
       incomingCall.on("stream", (userVideoStream) => {
-        setRemoteStreams((prev) => {
-          const filtered = prev.filter((s) => s.id !== incomingCall.peer);
-          return [
-            ...filtered,
-            { id: incomingCall.peer, stream: userVideoStream, type: "camera" },
-          ];
-        });
+        upsertRemoteStream(incomingCall.peer, userVideoStream);
       });
 
       callsRef.current[incomingCall.peer] = incomingCall;
@@ -393,6 +440,14 @@ export const useWebRTC = (
       setParticipants((prev) =>
         prev.map((p) => (p.id === socketId ? { ...p, micOn, camOn } : p)),
       );
+    });
+
+    newSocket.on("screen-share-started", ({ socketId }) => {
+      syncScreenShareStatus(socketId, true);
+    });
+
+    newSocket.on("screen-share-stopped", ({ socketId }) => {
+      syncScreenShareStatus(socketId, false);
     });
 
     newSocket.on(
