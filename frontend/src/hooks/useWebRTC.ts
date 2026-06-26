@@ -100,41 +100,86 @@ export const useWebRTC = (
   const localStreamRef = useRef<MediaStream | null>(localStream);
   const screenStreamRef = useRef<MediaStream | null>(screenStream);
 
+  // Referencias para los Dummy Tracks (Mantienen la conexión SDP viva cuando apagamos el hardware)
+  const dummyAudioRef = useRef<MediaStreamTrack | null>(null);
+  const dummyVideoRef = useRef<MediaStreamTrack | null>(null);
+
   // Keep refs synced with React state for callbacks that run outside the render cycle
   useEffect(() => {
     localStreamRef.current = localStream;
     screenStreamRef.current = screenStream;
   }, [localStream, screenStream]);
 
+  // ── INICIALIZACIÓN DE DUMMY STREAMS ──
+  useEffect(() => {
+    // 1. Crear un track de video falso (1x1 pixel negro)
+    if (!dummyVideoRef.current) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, 1, 1);
+      }
+      const dummyVideo = canvas.captureStream(1).getVideoTracks()[0];
+      dummyVideo.enabled = false;
+      dummyVideoRef.current = dummyVideo;
+    }
+
+    // 2. Crear un track de audio falso (Silencio total)
+    if (!dummyAudioRef.current) {
+      try {
+        const AudioContext =
+          window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioContext();
+        const oscillator = ctx.createOscillator();
+        const dst = ctx.createMediaStreamDestination();
+        oscillator.connect(dst);
+        oscillator.start();
+        const dummyAudio = dst.stream.getAudioTracks()[0];
+        dummyAudio.enabled = false;
+        dummyAudioRef.current = dummyAudio;
+      } catch (e) {
+        console.warn("[WebRTC] No se pudo crear el dummy audio context", e);
+      }
+    }
+  }, []);
+
   // HELPERS
 
   /**
-   * Combines Camera and Screen Share streams into a single payload to send via WebRTC.
+   * Garantiza que SIEMPRE se devuelva 1 track de audio y 1 de video.
+   * Si el usuario apagó su cámara o micrófono, usa los Dummy Tracks.
    */
   const getCombinedStream = useCallback((): MediaStream => {
     const combined = new MediaStream();
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        if (track.readyState === "live" && track.enabled) {
-          track.contentHint = "motion"; // Optimizes for camera movement
-          combined.addTrack(track);
-        }
-      });
+    // Priorizar Audio Real -> Audio Falso
+    const realAudio = localStreamRef.current
+      ?.getAudioTracks()
+      .find((t) => t.readyState === "live");
+    if (realAudio) combined.addTrack(realAudio);
+    else if (dummyAudioRef.current) combined.addTrack(dummyAudioRef.current);
+
+    // Priorizar Pantalla -> Cámara Real -> Video Falso
+    const realScreen = screenStreamRef.current
+      ?.getVideoTracks()
+      .find((t) => t.readyState === "live");
+    const realCamera = localStreamRef.current
+      ?.getVideoTracks()
+      .find((t) => t.readyState === "live");
+
+    if (realScreen) {
+      realScreen.contentHint = "detail";
+      combined.addTrack(realScreen);
+    } else if (realCamera) {
+      realCamera.contentHint = "motion";
+      combined.addTrack(realCamera);
+    } else if (dummyVideoRef.current) {
+      combined.addTrack(dummyVideoRef.current);
     }
 
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => {
-        if (track.readyState === "live") {
-          track.contentHint = "detail"; // Optimizes for crisp text in screen sharing
-          combined.addTrack(track);
-        }
-      });
-    }
-
-    console.debug(
-      `[WebRTC] Combined stream created with ${combined.getTracks().length} tracks.`,
-    );
     return combined;
   }, []);
 
@@ -142,8 +187,7 @@ export const useWebRTC = (
    * Closes all connections and cleans up memory to prevent leaks when leaving the room.
    */
   const cleanup = useCallback(() => {
-    console.info("[WebRTC] Cleaning up connections and sockets...");
-
+    console.info("[WebRTC] Limpiando conexiones...");
     Object.values(callsRef.current).forEach((call) => call.close());
     callsRef.current = {};
 
@@ -164,44 +208,35 @@ export const useWebRTC = (
   }, []);
 
   /**
-   * Triggers a renegotiation. Called automatically when the user toggles their camera or screen share.
+   * SUSTITUYE LAS PISTAS "AL VUELO" USANDO LA API NATIVA.
+   * Nunca corta la llamada. Si prendes la cámara, cambia el cuadro negro por tu cámara en tiempo real.
    */
   const updatePeerTracks = useCallback(() => {
-    if (!peerRef.current) return;
-
     const combinedStream = getCombinedStream();
-    console.info(
-      "[WebRTC] Renegociando llamadas con el nuevo stream multimedia...",
-    );
+    const newAudioTrack = combinedStream.getAudioTracks()[0];
+    const newVideoTrack = combinedStream.getVideoTracks()[0];
 
-    Object.keys(callsRef.current).forEach((targetPeerId) => {
-      // Close the old connection for this peer
-      if (callsRef.current[targetPeerId]) {
-        callsRef.current[targetPeerId].close();
-      }
+    Object.values(callsRef.current).forEach((call) => {
+      const pc = call.peerConnection;
+      if (!pc) return;
 
-      // Start a fresh connection with the updated tracks
-      const newCall = peerRef.current!.call(targetPeerId, combinedStream);
-
-      newCall.on("stream", (userVideoStream) => {
-        setRemoteStreams((prev) => {
-          const filtered = prev.filter((s) => s.id !== targetPeerId);
-          return [
-            ...filtered,
-            { id: targetPeerId, stream: userVideoStream, type: "camera" },
-          ];
-        });
+      pc.getSenders().forEach((sender) => {
+        if (sender.track?.kind === "audio" && newAudioTrack) {
+          if (sender.track !== newAudioTrack) {
+            sender
+              .replaceTrack(newAudioTrack)
+              .catch((e) => console.warn("[WebRTC] Error swap audio", e));
+            console.debug("[WebRTC] Track de audio actualizado en vivo.");
+          }
+        } else if (sender.track?.kind === "video" && newVideoTrack) {
+          if (sender.track !== newVideoTrack) {
+            sender
+              .replaceTrack(newVideoTrack)
+              .catch((e) => console.warn("[WebRTC] Error swap video", e));
+            console.debug("[WebRTC] Track de video actualizado en vivo.");
+          }
+        }
       });
-
-      newCall.on("error", (err) => {
-        console.error(
-          `[WebRTC] Error renegociando llamada con ${targetPeerId}:`,
-          err,
-        );
-      });
-
-      // Save the new reference
-      callsRef.current[targetPeerId] = newCall;
     });
 
     setRemoteTracksUpdate((prev) => prev + 1);
@@ -238,9 +273,7 @@ export const useWebRTC = (
     // React strict rule: only update state in response to external events
     newSocket.on("connect", () => {
       setSocket(newSocket);
-      console.info(
-        `[Socket.IO] Conectado al servidor de señalización con ID: ${newSocket.id}`,
-      );
+      console.info(`[Socket.IO] Conectado con ID: ${newSocket.id}`);
     });
 
     // 2. Initialize PeerJS
@@ -248,9 +281,7 @@ export const useWebRTC = (
     peerRef.current = peer;
 
     peer.on("open", (myPeerId) => {
-      console.info(`[PeerJS] Conectado a PeerJS. Mi PeerID: ${myPeerId}`);
-
-      // Join the room in the backend ONLY after PeerJS is ready
+      console.info(`[PeerJS] PeerID local: ${myPeerId}`);
       newSocket.emit("join-room", {
         roomId,
         user: {
@@ -267,14 +298,15 @@ export const useWebRTC = (
     const callRemotePeer = (targetPeerId: string) => {
       if (!targetPeerId || callsRef.current[targetPeerId]) return;
 
-      const combinedStream = getCombinedStream();
-      console.debug(`[WebRTC] Llamando al PeerID: ${targetPeerId}...`);
+      const combinedStream = getCombinedStream(); // Siempre tiene 1A/1V
+      console.debug(
+        `[WebRTC] Estableciendo conexión inicial con: ${targetPeerId}...`,
+      );
 
       const call = peer.call(targetPeerId, combinedStream);
       callsRef.current[targetPeerId] = call;
 
       call.on("stream", (userVideoStream) => {
-        console.debug(`[WebRTC] Received stream from PeerID: ${targetPeerId}`);
         setRemoteStreams((prev) => {
           if (prev.some((s) => s.id === call.peer)) return prev;
           return [
@@ -283,27 +315,19 @@ export const useWebRTC = (
           ];
         });
       });
-
-      call.on("close", () => {
-        console.info(`[WebRTC] Call with ${targetPeerId} closed normally.`);
-      });
     };
 
     // When someone else calls US
     peer.on("call", (incomingCall) => {
-      console.info(`[WebRTC] Llamada entrante de PeerID: ${incomingCall.peer}`);
+      console.info(`[WebRTC] Llamada entrante de: ${incomingCall.peer}`);
 
+      // Solo cerramos llamadas si hay una duplicación por reconexión de red
       if (callsRef.current[incomingCall.peer]) {
         callsRef.current[incomingCall.peer].close();
       }
 
-      const answerStream = getCombinedStream();
-
-      if (answerStream.getTracks().length > 0) {
-        incomingCall.answer(answerStream); // Answer with our camera/screen
-      } else {
-        incomingCall.answer(); // Answer without sending media
-      }
+      const answerStream = getCombinedStream(); // Siempre tiene 1A/1V
+      incomingCall.answer(answerStream);
 
       incomingCall.on("stream", (userVideoStream) => {
         setRemoteStreams((prev) => {
@@ -381,7 +405,6 @@ export const useWebRTC = (
         if (disconnectedPeerId && callsRef.current[disconnectedPeerId]) {
           callsRef.current[disconnectedPeerId].close();
           delete callsRef.current[disconnectedPeerId];
-
           setRemoteStreams((prev) =>
             prev.filter((s) => s.id !== disconnectedPeerId),
           );
