@@ -33,8 +33,6 @@ export default function NavigationSidebar({
 }: Readonly<NavigationSidebarProps>) {
   const navigate = useNavigate();
 
-  // DERIVED STATE
-
   const displayName = profile?.name || "Usuario";
 
   const initials = displayName
@@ -44,81 +42,116 @@ export default function NavigationSidebar({
     .join("")
     .toUpperCase();
 
-  // RENDER
-
   return (
-    <aside className="hidden w-64 flex-col justify-between border-r border-white/5 bg-[#161617] px-6 py-8 lg:flex">
-      <div>
-        {/* BRAND HEADER */}
+    <>
+      {/* SIDEBAR DESKTOP */}
+      <aside className="hidden w-64 flex-col justify-between border-r border-white/5 bg-[#161617] px-6 py-8 lg:flex">
         <div>
-          <h2 className="text-lg font-bold text-sky-200 select-none">
-            Space UV
-          </h2>
-          <p className="text-xs text-zinc-500 select-none">Modo Enfoque</p>
-        </div>
+          {/* BRAND HEADER */}
+          <div>
+            <h2 className="select-none text-lg font-bold text-sky-200">
+              Space UV
+            </h2>
+            <p className="select-none text-xs text-zinc-500">
+              Modo Enfoque
+            </p>
+          </div>
 
-        {/* NAVIGATION MENU */}
-        <nav aria-label="Navegación Principal" className="mt-12 space-y-3">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activePage === item.label;
-
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => navigate(item.route)}
-                aria-current={isActive ? "page" : undefined}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
-                  isActive
-                    ? "bg-sky-900/60 text-sky-100"
-                    : "text-zinc-400 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* BOTTOM ACTIONS & PROFILE */}
-      <div className="space-y-6">
-        <button
-          type="button"
-          onClick={() => navigate("/create-room")}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-300 px-4 py-3 text-sm font-semibold text-zinc-950 transition-colors duration-200 hover:bg-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161617]"
-        >
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="truncate">Iniciar nueva reunión</span>
-        </button>
-
-        {/* USER CARD */}
-        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3 overflow-hidden">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-300 text-sm font-bold text-zinc-950 select-none"
-            aria-hidden="true"
+          {/* NAVIGATION MENU */}
+          <nav
+            aria-label="Navegación Principal"
+            className="mt-12 space-y-3"
           >
-            {initials}
-          </div>
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activePage === item.label;
 
-          <div className="flex-1 overflow-hidden">
-            <p
-              className="truncate text-sm font-medium text-white"
-              title={displayName}
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => navigate(item.route)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+                    isActive
+                      ? "bg-sky-900/60 text-sky-100"
+                      : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* BOTTOM ACTIONS & PROFILE */}
+        <div className="space-y-6">
+          <button
+            type="button"
+            onClick={() => navigate("/create-room")}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-300 px-4 py-3 text-sm font-semibold text-zinc-950 transition-colors duration-200 hover:bg-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161617]"
+          >
+            <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">Iniciar nueva reunión</span>
+          </button>
+
+          {/* USER CARD */}
+          <div className="flex items-center gap-3 overflow-hidden rounded-xl bg-white/5 p-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-300 text-sm font-bold text-zinc-950 select-none"
+              aria-hidden="true"
             >
-              {displayName}
-            </p>
-            <p
-              className="truncate text-[10px] uppercase tracking-wider text-zinc-500"
-              title={"Estudiante"}
-            >
-              {"Estudiante"}
-            </p>
+              {initials}
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              <p
+                className="truncate text-sm font-medium text-white"
+                title={displayName}
+              >
+                {displayName}
+              </p>
+
+              <p
+                className="truncate text-[10px] uppercase tracking-wider text-zinc-500"
+                title="Estudiante"
+              >
+                Estudiante
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      {/* BOTTOM NAV MOBILE */}
+      <nav
+        aria-label="Navegación móvil"
+        className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-white/5 bg-[#161617] backdrop-blur lg:hidden"
+      >
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive = activePage === item.label;
+
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => navigate(item.route)}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex flex-col items-center gap-1 transition-colors ${
+                isActive
+                  ? "text-sky-300"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+              <span className="text-xs">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </>
   );
 }

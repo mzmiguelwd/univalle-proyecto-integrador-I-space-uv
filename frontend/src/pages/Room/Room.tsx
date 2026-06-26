@@ -322,20 +322,25 @@ export default function Room() {
         />
       )}
 
-      <section className="flex flex-1 p-4 gap-4 overflow-hidden h-[calc(100vh-80px)] transition-all duration-300">
-        <MainStage
-          isScreenSharing={isScreenSharing}
-          isPresenterMode={isPresenterMode}
-          screenVideoRef={screenVideoRef}
-          remoteStreams={remoteStreams}
-          activeScreenStream={activeScreenStream}
-          myStream={myStream}
-          pinnedUserId={pinnedUserId}
-        />
+      <section className="flex flex-col lg:flex-row flex-1 gap-4 p-2 lg:p-4 overflow-hidden h-[calc(100vh-80px)] transition-all duration-300">
+        <div className="flex-1 min-h-[40vh] lg:min-h-0">
+          <MainStage
+            isScreenSharing={isScreenSharing}
+            isPresenterMode={isPresenterMode}
+            screenVideoRef={screenVideoRef}
+            remoteStreams={remoteStreams}
+            activeScreenStream={activeScreenStream}
+            myStream={myStream}
+            pinnedUserId={pinnedUserId}
+          />
+        </div>
 
         <aside
-          className={`flex flex-col gap-4 transition-all duration-300 ${
-            isPresenterMode ? "w-full lg:w-70 xl:w-[320px]" : "w-full lg:w-95"
+          className={`flex flex-col gap-4 overflow-hidden transition-all duration-300
+          ${
+            isPresenterMode
+              ? "h-[45vh] lg:h-auto w-full lg:w-70 xl:w-[320px]"
+              : "h-[45vh] lg:h-auto w-full lg:w-95"
           }`}
         >
           <ParticipantsGrid

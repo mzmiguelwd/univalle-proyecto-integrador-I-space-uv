@@ -285,7 +285,7 @@ export default function Profile() {
   // RENDER
 
   return (
-    <main className="flex h-screen w-full overflow-hidden bg-[#0f0f10] text-white">
+    <main className="flex h-screen w-full overflow-hidden bg-[#0f0f10] text-white pb-16 lg:pb-0">
       <NavigationSidebar activePage="Mi perfil" profile={profile} />
 
       <section className="flex-1 h-full overflow-y-auto px-5 py-8 md:px-10 lg:px-14">
