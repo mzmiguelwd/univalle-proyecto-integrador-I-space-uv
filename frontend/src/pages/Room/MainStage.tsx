@@ -10,7 +10,6 @@ interface RemoteVideoProps {
 }
 
 interface MainStageProps {
-  isPresenterMode: boolean;
   isScreenSharing: boolean;
   screenVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteStreams: RemoteStream[];
@@ -44,7 +43,6 @@ const RemoteVideo = ({
 };
 
 export default function MainStage({
-  isPresenterMode,
   isScreenSharing,
   screenVideoRef,
   remoteStreams,

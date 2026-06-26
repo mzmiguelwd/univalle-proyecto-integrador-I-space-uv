@@ -22,7 +22,7 @@ export default function Room() {
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessing = false;
 
   // ESTADOS DE TRANSMISIÓN LOCAL
   const [myStream, setMyStream] = useState<MediaStream | null>(null);
@@ -220,7 +220,6 @@ export default function Room() {
     <div className="flex h-screen flex-col bg-[#121212] text-white overflow-hidden">
       <section className="flex flex-1 p-4 gap-4 overflow-hidden h-[calc(100vh-80px)]">
         <MainStage
-          isPresenterMode={isPresenterMode}
           isScreenSharing={isScreenSharing}
           screenVideoRef={screenVideoRef}
           remoteStreams={remoteStreams}
