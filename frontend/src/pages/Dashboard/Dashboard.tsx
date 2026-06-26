@@ -31,7 +31,7 @@ export default function Dashboard() {
   // RENDER
 
   return (
-    <main className="flex min-h-screen w-full bg-[#0f0f10] text-white">
+    <main className="flex min-h-screen w-full bg-[#0f0f10] text-white pb-16 lg:pb-0">
       <NavigationSidebar activePage="Inicio" profile={profile} />
       <StudySession profile={profile} />
     </main>
