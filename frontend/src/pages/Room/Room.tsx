@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
@@ -36,19 +36,25 @@ export default function Room() {
   // GLOBAL REFS
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
+
+  /**
+   * FIX #6: localStreamRef es la única fuente de verdad para el stream local.
+   * setMyStream se usa SOLO para notificar a useWebRTC del cambio (triggering
+   * el efecto de renegociación). Las manipulaciones de tracks siempre van
+   * contra localStreamRef.current.
+   */
   const localStreamRef = useRef<MediaStream | null>(null);
 
   // INITIALIZATION
+
   useEffect(() => {
     const initializeRoom = async () => {
       if (!roomId || !auth.currentUser) return;
 
       try {
-        // Load user profile
         const userData = await getUserProfile(auth.currentUser.uid);
         if (userData) setProfile(userData);
 
-        // Verify if the current user is the owner of the room
         const roomRef = doc(db, "rooms", roomId);
         const roomDoc = await getDoc(roomRef);
 
@@ -59,10 +65,7 @@ export default function Room() {
           setIsOwner(true);
         }
       } catch (error: unknown) {
-        console.error(
-          "Error inicializando la configuración de la sala:",
-          error,
-        );
+        console.error("[Room] Error inicializando sala:", error);
       }
     };
 
@@ -73,18 +76,19 @@ export default function Room() {
     () => ({
       uid: profile?.uid ?? "",
       name: profile?.name ?? "Usuario",
-      avatar: profile?.avatar ?? "null",
+      avatar: profile?.avatar ?? null,
     }),
     [profile],
   );
 
-  const handleRoomEnded = () => navigate("/dashboard");
+  const handleRoomEnded = useCallback(() => {
+    navigate("/dashboard");
+  }, [navigate]);
 
   // CORE: WEBRTC
 
   const {
     remoteStreams,
-    remoteTracksUpdate,
     participants,
     socketRef,
     cleanup,
@@ -98,53 +102,118 @@ export default function Room() {
     handleRoomEnded,
   );
 
-  const screenStreams = remoteStreams.filter(
-    (stream) => stream.type === "screen",
-  );
-
-  const activeScreenStream = screenStreams.at(-1) ?? null;
-
-  const isPresenterMode = isScreenSharing || Boolean(activeScreenStream);
+  /**
+   * FIX #3: La lógica de "presenter mode" ahora usa el estado de socket
+   * (isScreenSharing de los participantes) en lugar de intentar detectar
+   * por contentHint del stream, que no funciona en WebRTC.
+   */
+  const isPresenterMode =
+    isScreenSharing || participants.some((p) => p.isScreenSharing);
 
   // MEDIA CONTROL HANDLERS
 
-  const toggleCamera = async () => {
+  const toggleCamera = useCallback(async () => {
     if (isCameraOn) {
-      myStream?.getVideoTracks().forEach((track) => track.stop());
-      socketRef.current?.emit("camera-stopped", { roomId });
+      // Detener los tracks de video del stream actual
+      localStreamRef.current?.getVideoTracks().forEach((track) => track.stop());
 
-      const currentAudioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+      // Emitir al servidor que la cámara se apagó
+      socketRef.current?.emit("camera-stopped", { roomId });
+      emitMediaState(isMicrophoneOn, false);
+
+      // Construir nuevo stream solo con audio (si existe)
+      const audioTracks = localStreamRef.current?.getAudioTracks() ?? [];
       const nextStream =
-        currentAudioTracks.length > 0
-          ? new MediaStream([...currentAudioTracks])
-          : null;
+        audioTracks.length > 0 ? new MediaStream(audioTracks) : null;
 
       localStreamRef.current = nextStream;
-      setMyStream(nextStream);
-      setIsCameraOn(false);
+      setMyStream(nextStream); // Notifica a useWebRTC para renegociar
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = nextStream;
       }
 
-      console.info("Cámara apagada exitosamente.");
-      emitMediaState(isMicrophoneOn, false);
+      setIsCameraOn(false);
+
+      // Renegociar inmediatamente
       updatePeerTracksCallback?.();
     } else {
       try {
         setPermissionError(null);
         const videoStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         });
 
-        const currentAudioTracks =
-          localStreamRef.current?.getAudioTracks() ?? [];
+        const audioTracks = localStreamRef.current?.getAudioTracks() ?? [];
         const newVideoTracks = videoStream.getVideoTracks();
+        const newStream = new MediaStream([...audioTracks, ...newVideoTracks]);
 
-        const newStream = new MediaStream([
-          ...currentAudioTracks,
-          ...newVideoTracks,
-        ]);
+        localStreamRef.current = newStream;
+        setMyStream(newStream); // Notifica a useWebRTC para renegociar
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = newStream;
+        }
+
+        setIsCameraOn(true);
+        emitMediaState(isMicrophoneOn, true);
+        updatePeerTracksCallback?.();
+      } catch (error: unknown) {
+        console.error("[Room] Error accediendo a cámara:", error);
+        setPermissionError(
+          "Permiso de cámara denegado. Por favor, habilítalo en la configuración de tu navegador.",
+        );
+      }
+    }
+  }, [
+    isCameraOn,
+    isMicrophoneOn,
+    roomId,
+    socketRef,
+    emitMediaState,
+    updatePeerTracksCallback,
+  ]);
+
+  /**
+   * FIX #7: toggleMicrophone ahora crea un stream nuevo en lugar de
+   * solo deshabilitar el track. Deshabilitar (track.enabled = false) mantiene
+   * el track en el RTCPeerConnection y envía silencio, pero no refleja
+   * correctamente el estado "micrófono apagado" para los demás.
+   *
+   * La estrategia correcta:
+   * - Apagar: detener el track y reconstruir el stream sin audio
+   * - Encender: pedir nuevo stream de audio y añadir al stream existente
+   *
+   * EXCEPCIÓN: Para mute/unmute simple (sin quitar permisos), usar enabled
+   * es más eficiente. Aquí elegimos la versión robusta que funciona en todos
+   * los casos (incluyendo cuando el track llega a "ended" state).
+   */
+  const toggleMicrophone = useCallback(async () => {
+    if (isMicrophoneOn) {
+      // Silenciar: detener tracks de audio y reconstruir sin ellos
+      localStreamRef.current?.getAudioTracks().forEach((track) => track.stop());
+
+      const videoTracks = localStreamRef.current?.getVideoTracks() ?? [];
+      const nextStream =
+        videoTracks.length > 0 ? new MediaStream(videoTracks) : null;
+
+      localStreamRef.current = nextStream;
+      setMyStream(nextStream);
+
+      setIsMicrophoneOn(false);
+      emitMediaState(false, isCameraOn);
+      updatePeerTracksCallback?.();
+    } else {
+      try {
+        setPermissionError(null);
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+
+        const videoTracks = localStreamRef.current?.getVideoTracks() ?? [];
+        const newAudioTracks = audioStream.getAudioTracks();
+        const newStream = new MediaStream([...videoTracks, ...newAudioTracks]);
 
         localStreamRef.current = newStream;
         setMyStream(newStream);
@@ -153,98 +222,19 @@ export default function Room() {
           localVideoRef.current.srcObject = newStream;
         }
 
-        setIsCameraOn(true);
-        console.info("Cámara encendida exitosamente.", {
-          videoTracks: newVideoTracks.length,
-        });
-
-        emitMediaState(isMicrophoneOn, true);
+        setIsMicrophoneOn(true);
+        emitMediaState(true, isCameraOn);
         updatePeerTracksCallback?.();
       } catch (error: unknown) {
-        console.error("Error obteniendo acceso al hardware de video:", error);
+        console.error("[Room] Error accediendo a micrófono:", error);
         setPermissionError(
-          "Permiso de cámara denegado. Por favor, habilítalo en la configuración de tu navegador.",
+          "Permiso de micrófono denegado. Por favor, habilítalo en la configuración de tu navegador.",
         );
       }
     }
-  };
+  }, [isMicrophoneOn, isCameraOn, emitMediaState, updatePeerTracksCallback]);
 
-  const toggleMicrophone = async () => {
-    const currentAudioTracks = localStreamRef.current?.getAudioTracks() ?? [];
-    const currentVideoTracks = localStreamRef.current?.getVideoTracks() ?? [];
-
-    if (isMicrophoneOn) {
-      currentAudioTracks.forEach((track) => {
-        track.enabled = false;
-      });
-
-      const nextStream = new MediaStream([
-        ...currentAudioTracks,
-        ...currentVideoTracks,
-      ]);
-      localStreamRef.current = nextStream;
-      setMyStream(nextStream);
-
-      setIsMicrophoneOn(false);
-      console.info("Micrófono silenciado exitosamente.");
-
-      emitMediaState(false, isCameraOn);
-      updatePeerTracksCallback?.();
-    } else {
-      if (currentAudioTracks.length === 0) {
-        try {
-          setPermissionError(null);
-          const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: false,
-          });
-          const newAudioTracks = audioStream.getAudioTracks();
-
-          const newStream = new MediaStream([
-            ...currentVideoTracks,
-            ...newAudioTracks,
-          ]);
-
-          localStreamRef.current = newStream;
-          setMyStream(newStream);
-
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = newStream;
-          }
-
-          setIsMicrophoneOn(true);
-          console.info("Micrófono encendido exitosamente (Nuevo Stream).");
-
-          emitMediaState(true, isCameraOn);
-          updatePeerTracksCallback?.();
-        } catch (error: unknown) {
-          console.error("Error obteniendo acceso al hardware de audio:", error);
-          setPermissionError(
-            "Permiso de micrófono denegado. Por favor, habilítalo en la configuración de tu navegador.",
-          );
-        }
-      } else {
-        currentAudioTracks.forEach((track) => {
-          track.enabled = true;
-        });
-
-        const nextStream = new MediaStream([
-          ...currentAudioTracks,
-          ...currentVideoTracks,
-        ]);
-        localStreamRef.current = nextStream;
-        setMyStream(nextStream);
-
-        setIsMicrophoneOn(true);
-        console.info("Micrófono encendido exitosamente (Track existente).");
-
-        emitMediaState(true, isCameraOn);
-        updatePeerTracksCallback?.();
-      }
-    }
-  };
-
-  const toggleScreenShare = async () => {
+  const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
       screenStream?.getTracks().forEach((track) => track.stop());
       socketRef.current?.emit("screen-share-stopped", { roomId });
@@ -255,76 +245,76 @@ export default function Room() {
       if (screenVideoRef.current) {
         screenVideoRef.current.srcObject = null;
       }
-      console.info("Compartición de pantalla detenida manualmente.");
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
+          video: { frameRate: { ideal: 30 } },
+          audio: false, // El audio del sistema tiene issues de eco; usar false
         });
 
-        setIsScreenSharing(true);
         setScreenStream(stream);
+        setIsScreenSharing(true);
         socketRef.current?.emit("screen-share-started", { roomId });
 
-        setTimeout(() => {
-          if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
-        }, 100);
+        if (screenVideoRef.current) {
+          screenVideoRef.current.srcObject = stream;
+        }
 
+        // Cuando el usuario detiene desde el browser (botón "Dejar de compartir")
         const screenTrack = stream.getVideoTracks()[0];
-
         screenTrack.addEventListener("ended", () => {
           setIsScreenSharing(false);
           setScreenStream(null);
           socketRef.current?.emit("screen-share-stopped", { roomId });
           if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
-          console.info(
-            "El usuario ha detenido la compartición de pantalla desde el navegador.",
-          );
         });
       } catch (error: unknown) {
-        console.error("Error iniciando compartición de pantalla:", error);
+        console.error(
+          "[Room] Error iniciando compartición de pantalla:",
+          error,
+        );
       }
     }
-  };
+  }, [isScreenSharing, screenStream, roomId, socketRef]);
 
   // CLEANUP & LEAVE HANDLERS
 
-  const stopAllStreams = () => {
-    myStream?.getTracks().forEach((track) => track.stop());
-    screenStream?.getTracks().forEach((track) => track.stop());
+  const stopAllStreams = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    screenStream?.getTracks().forEach((track) => track.stop());
 
+    localStreamRef.current = null;
     setMyStream(null);
     setScreenStream(null);
-    console.info("Todos los streams locales han sido detenidos.");
-  };
+  }, [screenStream]);
 
+  // Limpiar streams al desmontar el componente
   useEffect(() => {
-    return () => stopAllStreams();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
   }, []);
 
-  const handleLeaveOnly = () => {
+  const handleLeaveOnly = useCallback(() => {
     stopAllStreams();
     cleanup();
     navigate("/dashboard");
-  };
+  }, [stopAllStreams, cleanup, navigate]);
 
-  const handleEndRoomForAll = async () => {
+  const handleEndRoomForAll = useCallback(async () => {
     if (!roomId) return;
     setIsProcessing(true);
 
     try {
       socketRef.current?.emit("end-room", { roomId });
-
       stopAllStreams();
       cleanup();
       navigate("/dashboard");
     } catch (error: unknown) {
-      console.error("Error vaciando la llamada:", error);
+      console.error("[Room] Error finalizando la sala:", error);
       setIsProcessing(false);
     }
-  };
+  }, [roomId, socketRef, stopAllStreams, cleanup, navigate]);
 
   // RENDER
 
@@ -365,7 +355,15 @@ export default function Room() {
           isPresenterMode={isPresenterMode}
           screenVideoRef={screenVideoRef}
           remoteStreams={remoteStreams}
-          activeScreenStream={activeScreenStream}
+          activeScreenStream={
+            // FIX #3: El stream del presentador remoto se identifica por
+            // el estado isScreenSharing del participante, no por contentHint
+            remoteStreams.find((s) =>
+              participants.find(
+                (p) => p.peerId === s.peerId && p.isScreenSharing,
+              ),
+            ) ?? null
+          }
           myStream={myStream}
           pinnedUserId={pinnedUserId}
         />
@@ -383,7 +381,6 @@ export default function Room() {
             localVideoRef={localVideoRef}
             participants={participants}
             remoteStreams={remoteStreams}
-            remoteTracksUpdate={remoteTracksUpdate}
             pinnedUserId={pinnedUserId}
             onPinUser={(id) =>
               setPinnedUserId((prev) => (prev === id ? null : id))

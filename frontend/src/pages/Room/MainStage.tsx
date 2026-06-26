@@ -67,7 +67,7 @@ export default function MainStage({
       displayedStream = myStream;
     } else if (pinnedUserId) {
       displayedStream =
-        remoteStreams.find((s) => s.id === pinnedUserId)?.stream ?? null;
+        remoteStreams.find((s) => s.peerId === pinnedUserId)?.stream ?? null;
     } else if (activeScreenStream) {
       displayedStream = activeScreenStream.stream;
     } else if (remoteStreams.length > 0) {
