@@ -30,6 +30,8 @@ export default function Room() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
+  const [isChatOpen, setIsChatOpen] = useState(window.innerWidth >= 1024);
+
   // ── LOCAL MEDIA STATES (The Source of Truth) ──
   const [myStream, setMyStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
@@ -388,23 +390,31 @@ export default function Room() {
             isPresenterMode ? "w-full lg:w-70 xl:w-[320px]" : "w-full lg:w-95"
           }`}
         >
-          <ParticipantsGrid
-            profile={profile}
-            isPresenterMode={isPresenterMode}
-            isCameraOn={isCameraOn}
-            isMicrophoneOn={isMicrophoneOn}
-            localVideoRef={localVideoRef}
-            participants={participants}
-            remoteStreams={cameraStreamsOnly}
-            pinnedUserId={pinnedUserId}
-            onPinUser={(id) =>
-              setPinnedUserId((prev) => (prev === id ? null : id))
-            }
-          />
-          <ChatPanel roomId={roomId ?? ""} profile={profile} />
+          {/* Envolvemos el Grid para que se expanda cuando el chat esté cerrado */}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <ParticipantsGrid
+              profile={profile}
+              isPresenterMode={isPresenterMode}
+              isCameraOn={isCameraOn}
+              isMicrophoneOn={isMicrophoneOn}
+              localVideoRef={localVideoRef}
+              participants={participants}
+              remoteStreams={cameraStreamsOnly}
+              pinnedUserId={pinnedUserId}
+              onPinUser={(id) =>
+                setPinnedUserId((prev) => (prev === id ? null : id))
+              }
+            />
+          </div>
+
+          {/* Renderizado condicional del ChatPanel */}
+          {isChatOpen && (
+            <div className="h-[40vh] lg:h-auto lg:flex-1 flex flex-col shrink-0 overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-4">
+              <ChatPanel roomId={roomId ?? ""} profile={profile} />
+            </div>
+          )}
         </aside>
       </section>
-
       <ControlsBar
         roomId={roomId ?? ""}
         isOwner={isOwner}
@@ -416,6 +426,9 @@ export default function Room() {
         toggleScreenShare={toggleScreenShare}
         totalParticipants={participants.length + 1}
         onLeaveClick={() => setShowLeaveModal(true)}
+        // PASAMOS LAS NUEVAS PROPIEDADES:
+        isChatOpen={isChatOpen}
+        toggleChat={() => setIsChatOpen((prev) => !prev)}
       />
 
       <LeaveModal

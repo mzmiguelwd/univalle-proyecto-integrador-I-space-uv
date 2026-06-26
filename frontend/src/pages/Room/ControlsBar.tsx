@@ -25,6 +25,8 @@ interface ControlsBarProps {
   toggleScreenShare: () => void;
   totalParticipants: number;
   onLeaveClick: () => void;
+  isChatOpen: boolean;
+  toggleChat: () => void;
 }
 
 // MAIN COMPONENT
@@ -40,6 +42,8 @@ export default function ControlsBar({
   toggleScreenShare,
   totalParticipants,
   onLeaveClick,
+  isChatOpen,
+  toggleChat,
 }: Readonly<ControlsBarProps>) {
   const [hasCopiedId, setHasCopiedId] = useState(false);
   const timeoutRef = useRef<number | null>(null);
@@ -186,8 +190,13 @@ export default function ControlsBar({
         {/* CHAT TOGGLE */}
         <button
           type="button"
-          aria-label="Abrir panel de chat"
-          className="rounded-xl border border-sky-900/50 bg-[#0A2E46] p-3 sm:p-3.5 text-sky-400 transition-colors hover:bg-[#0C3A5A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 hidden sm:block"
+          onClick={toggleChat}
+          aria-label={isChatOpen ? "Cerrar chat" : "Abrir chat"}
+          className={`rounded-xl p-3 sm:p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+            isChatOpen
+              ? "bg-sky-500 text-white hover:bg-sky-600 shadow-lg shadow-sky-500/20"
+              : "border border-sky-900/50 bg-[#0A2E46] text-sky-400 hover:bg-[#0C3A5A]"
+          }`}
         >
           <MessageSquare className="h-5 w-5" aria-hidden="true" />
         </button>
