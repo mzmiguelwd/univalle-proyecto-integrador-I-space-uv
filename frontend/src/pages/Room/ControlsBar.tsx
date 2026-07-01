@@ -207,11 +207,16 @@ export default function ControlsBar({
         <button
           type="button"
           aria-label={`Ver ${totalParticipants} participantes`}
+          aria-describedby="participants-count"
           className="rounded-xl bg-[#2A2A2A] p-3 sm:p-3.5 text-gray-300 transition-colors hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
         >
           <div className="relative">
             <Users className="h-5 w-5" aria-hidden="true" />
-            <span className="absolute -right-2 -top-2 rounded-full border border-[#2A2A2A] bg-sky-500 px-1.5 text-[10px] font-bold text-white">
+            <span
+              id="participants-count"
+              aria-hidden="true"
+              className="absolute -right-2 -top-2 rounded-full border border-[#2A2A2A] bg-sky-500 px-1.5 text-[10px] font-bold text-white"
+            >
               {totalParticipants}
             </span>
           </div>
