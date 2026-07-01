@@ -18,7 +18,29 @@ interface RoomFormData {
 interface CustomError {
   customErrors?: Record<string, string>;
   message?: string;
+  code?: string;
 }
+
+const getCreateRoomErrorMessage = (error: unknown): string => {
+  const errorObj = error as CustomError;
+
+  switch (errorObj?.code) {
+    case "permission-denied":
+      return "No tienes permisos para crear salas. Inicia sesión nuevamente.";
+
+    case "unavailable":
+      return "No fue posible conectar con el servidor. Verifica tu conexión.";
+
+    case "deadline-exceeded":
+      return "La operación tardó demasiado. Intenta nuevamente.";
+
+    default:
+      return (
+        errorObj?.message ??
+        "Ocurrió un error al crear la sala. Inténtalo nuevamente."
+      );
+  }
+};
 
 // MAIN COMPONENT
 
@@ -67,9 +89,7 @@ export default function CreateRoom() {
       if (errorObj?.customErrors) {
         setFieldErrors(errorObj.customErrors);
       } else {
-        setError(
-          errorObj?.message || "Ocurrió un error inesperado al crear la sala.",
-        );
+        setError(getCreateRoomErrorMessage(error));
       }
     } finally {
       setIsLoading(false);
@@ -117,6 +137,10 @@ export default function CreateRoom() {
                   </label>
                   <input
                     id="room-title"
+                    aria-invalid={Boolean(fieldErrors.title)}
+                    aria-describedby={
+                      fieldErrors.title ? "room-title-error" : undefined
+                    }
                     type="text"
                     placeholder="Ej: Sala de estudio de Cálculo II"
                     value={formData.title}
@@ -126,7 +150,10 @@ export default function CreateRoom() {
                     className={`w-full rounded-lg border bg-[#121212] px-4 py-2.5 text-white transition-colors focus:border-sky-500 focus:outline-none ${fieldErrors.title ? "border-red-500" : "border-gray-700"}`}
                   />
                   {fieldErrors.title && (
-                    <p className="text-xs text-red-400">{fieldErrors.title}</p>
+                    <p
+                      id="room-title-error"
+                      className="text-xs text-red-400"
+                    >{fieldErrors.title}</p>
                   )}
                 </div>
 
@@ -140,6 +167,10 @@ export default function CreateRoom() {
                   </label>
                   <textarea
                     id="room-topic"
+                    aria-invalid={Boolean(fieldErrors.topic)}
+                    aria-describedby={
+                      fieldErrors.topic ? "room-topic-error" : undefined
+                    }
                     placeholder="Ej: Un espacio para estudiar Cálculo II y resolver dudas entre compañeros."
                     value={formData.topic}
                     onChange={(event) =>
@@ -148,6 +179,15 @@ export default function CreateRoom() {
                     rows={3}
                     className={`w-full resize-none rounded-lg border bg-[#121212] px-4 py-2.5 text-white transition-colors focus:border-sky-500 focus:outline-none ${fieldErrors.topic ? "border-red-500" : "border-gray-700"}`}
                   />
+
+                  {fieldErrors.topic && (
+                    <p
+                      id="room-topic-error"
+                      className="text-xs text-red-400"
+                    >
+                      {fieldErrors.topic}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -182,6 +222,8 @@ export default function CreateRoom() {
                   </label>
                   <select
                     id="participant-limit"
+                    aria-invalid={Boolean(fieldErrors.limit)}
+                    aria-describedby={fieldErrors.limit ? "room-limit-error" : undefined}
                     value={formData.limit}
                     onChange={(event) =>
                       setFormData({ ...formData, limit: event.target.value })
@@ -193,6 +235,12 @@ export default function CreateRoom() {
                     <option value="6">6 participantes</option>
                     <option value="10">10 participantes</option>
                   </select>
+
+                  {fieldErrors.limit && (
+                    <p id="room-limit-error" className="text-xs text-red-400">
+                      {fieldErrors.limit}
+                    </p>
+                  )}
                 </div>
               </div>
 

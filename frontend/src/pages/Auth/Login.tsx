@@ -16,11 +16,28 @@ const getErrorMessage = (error: unknown): string => {
     "auth/invalid-credential": "Correo o contraseña incorrectos.",
     "auth/user-not-found": "No existe una cuenta con este correo.",
     "auth/wrong-password": "Contraseña incorrecta.",
+    "auth/invalid-email": "El correo electrónico no tiene un formato válido.",
     "auth/too-many-requests": "Demasiados intentos. Espera unos minutos.",
     "auth/user-disabled": "Esta cuenta ha sido deshabilitada.",
     "auth/network-request-failed": "Error de red. Verifica tu conexión.",
   };
   return errorMap[code] || "Credenciales inválidas o usuario no encontrado.";
+};
+
+const getGoogleLoginErrorMessage = (error: unknown): string => {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? (error as { code: string }).code
+      : "";
+
+  const errorMap: Record<string, string> = {
+    "auth/popup-closed-by-user": "Cerraste la ventana de Google antes de completar el inicio de sesión.",
+    "auth/cancelled-popup-request": "Ya hay una ventana de inicio de sesión abierta.",
+    "auth/popup-blocked": "El navegador bloqueó la ventana emergente de Google. Permite pop-ups e inténtalo de nuevo.",
+    "auth/network-request-failed": "Error de red. Verifica tu conexión.",
+  };
+
+  return errorMap[code] || "No pudimos iniciar sesión con Google. Inténtalo nuevamente.";
 };
 
 // SUB-COMPONENTS
@@ -151,7 +168,7 @@ export default function Login() {
       navigate("/dashboard");
     } catch (error: unknown) {
       console.error("Google Login Error:", error);
-      setError("Ocurrió un error al iniciar sesión con Google.");
+      setError(getGoogleLoginErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

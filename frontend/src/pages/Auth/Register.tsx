@@ -50,13 +50,27 @@ const getErrorMessage = (error: unknown): string => {
       : "";
 
   const errorMap: Record<string, string> = {
-    "auth/email-already-in-use": "Este correo ya está registrado.",
-    "auth/invalid-email": "El correo electrónico no es válido.",
-    "auth/weak-password": "La contraseña es demasiado débil.",
-    "auth/network-request-failed": "Error de red. Verifica tu conexión.",
+    "auth/email-already-in-use":
+      "Este correo electrónico ya está registrado.",
+
+    "auth/invalid-email":
+      "El correo electrónico no tiene un formato válido.",
+
+    "auth/weak-password":
+      "La contraseña es demasiado débil. Usa al menos 8 caracteres.",
+
+    "auth/network-request-failed":
+      "No fue posible conectar con el servidor. Verifica tu conexión.",
+
+    "auth/too-many-requests":
+      "Has realizado demasiados intentos. Espera unos minutos antes de volver a intentarlo.",
   };
 
-  return errorMap[code] || message || "Ocurrió un error al crear la cuenta.";
+  return (
+    errorMap[code] ??
+    message ??
+    "No fue posible crear la cuenta. Inténtalo nuevamente."
+  );
 };
 
 const getPasswordStrength = (password: string) => {

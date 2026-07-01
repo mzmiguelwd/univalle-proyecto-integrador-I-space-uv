@@ -21,10 +21,20 @@ const getErrorMessage = (error: unknown): string => {
       : "";
 
   const errorMap: Record<string, string> = {
-    "auth/user-not-found": "No existe una cuenta con este correo.",
-    "auth/invalid-email": "El correo electrónico no es válido.",
-    "auth/too-many-requests": "Demasiados intentos. Espera unos minutos.",
-    "auth/network-request-failed": "Error de red. Verifica tu conexión.",
+    "auth/user-not-found":
+      "No existe una cuenta asociada a este correo electrónico.",
+
+    "auth/invalid-email":
+      "El correo electrónico no tiene un formato válido.",
+
+    "auth/too-many-requests":
+      "Has realizado demasiados intentos. Espera unos minutos antes de volver a intentarlo.",
+
+    "auth/network-request-failed":
+      "No fue posible conectar con el servidor. Verifica tu conexión.",
+
+    "auth/internal-error":
+      "Ocurrió un error interno. Intenta nuevamente en unos minutos.",
   };
 
   return errorMap[code] || "Ocurrió un error. Inténtalo de nuevo.";
