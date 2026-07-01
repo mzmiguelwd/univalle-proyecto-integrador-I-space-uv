@@ -84,13 +84,18 @@ const GoogleIcon = () => (
 
 const FormField = ({
   label,
+  htmlFor,
   children,
 }: {
   label: string;
+  htmlFor: string;
   children: React.ReactNode;
 }) => (
   <div className="space-y-1.5">
-    <label className="text-[10px] font-semibold tracking-[0.15em] text-white/50 uppercase">
+    <label
+      htmlFor={htmlFor}
+      className="text-[10px] font-semibold tracking-[0.15em] text-white/50 uppercase"
+    >
       {label}
     </label>
     {children}
@@ -191,8 +196,9 @@ export default function Login() {
             )}
 
             {/* EMAIL INPUT */}
-            <FormField label="Correo electrónico">
+            <FormField label="Correo electrónico" htmlFor="login-email">
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -203,7 +209,7 @@ export default function Login() {
             </FormField>
 
             {/* PASSWORD INPUT */}
-            <FormField label="Contraseña">
+            <FormField label="Contraseña" htmlFor="login-password">
               <div className="flex justify-end -mt-1 mb-1">
                 <Link
                   to="/forgot-password"
@@ -215,6 +221,7 @@ export default function Login() {
 
               <div className="relative">
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -240,9 +247,13 @@ export default function Login() {
             </FormField>
 
             {/* REMEMBER ME CHECKBOX */}
-            <label className="flex items-center gap-3 cursor-pointer group py-1 w-fit">
+            <label
+              htmlFor="remember-me"
+              className="flex items-center gap-3 cursor-pointer group py-1 w-fit"
+            >
               <div className="relative flex items-center justify-center">
                 <input
+                  id="remember-me"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(event) => setRememberMe(event.target.checked)}

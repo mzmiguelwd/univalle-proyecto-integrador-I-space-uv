@@ -143,13 +143,13 @@ export default function ForgotPassword() {
                 {/* EMAIL INPUT */}
                 <div className="space-y-1.5">
                   <label
-                    htmlFor="reset-email"
+                    htmlFor="forgot-email"
                     className="block text-[10px] font-semibold tracking-[0.15em] text-white/50 uppercase cursor-pointer"
                   >
                     Correo electrónico
                   </label>
                   <input
-                    id="reset-email"
+                    id="forgot-email"
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
