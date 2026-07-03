@@ -40,11 +40,15 @@ const MessageBubble = ({ message, isMe }: Readonly<MessageBubbleProps>) => {
       <div
         className={`max-w-[85%] rounded-lg p-3 text-sm shadow-sm ${
           isMe
-            ? "rounded-br-none bg-sky-600 text-white"
+            ? "rounded-br-none bg-sky-700 text-white"
             : "rounded-bl-none border border-gray-700 bg-[#1E1E1E] text-gray-100"
         }`}
       >
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-sky-300">
+        <p
+          className={`mb-1 text-[11px] font-semibold uppercase tracking-wide ${
+            isMe ? "text-sky-100" : "text-sky-300"
+          }`}
+        >
           {displayName}
         </p>
         <p className="wrap-break-word">{message.text}</p>
@@ -52,7 +56,7 @@ const MessageBubble = ({ message, isMe }: Readonly<MessageBubbleProps>) => {
         {message.timestamp && (
           <span
             className={`mt-1 block text-right text-[10px] ${
-              isMe ? "text-blue-200" : "text-gray-400"
+              isMe ? "text-sky-100/90" : "text-gray-400"
             }`}
           >
             {message.timestamp.toDate().toLocaleTimeString([], {
@@ -129,6 +133,8 @@ export default function ChatHistory({
 
   // HELPER RENDERING STATES
 
+  // ChatHistory.tsx
+
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -167,7 +173,7 @@ export default function ChatHistory({
           <p className="text-sm font-semibold text-gray-200">
             No hay mensajes aún
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-400">
             Sé el primero en saludar.
           </p>
         </output>

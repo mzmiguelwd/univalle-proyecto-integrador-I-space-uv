@@ -78,6 +78,7 @@ export default function ControlsBar({
   };
 
   return (
+    // ControlsBar.tsx
     <footer
       className="flex h-20 shrink-0 items-center justify-between border-t border-gray-800 bg-[#121212] px-4 md:px-6"
       aria-label="Controles de la sala"
