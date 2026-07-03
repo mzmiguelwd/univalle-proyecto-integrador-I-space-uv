@@ -68,6 +68,7 @@ export default function ChatPanel({
   const isInputEmpty = message.trim().length === 0;
 
   return (
+    // ChatPanel.tsx
     <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-gray-800 bg-[#121212]">
       {/* HEADER */}
       <header className="flex shrink-0 items-center justify-between border-b border-gray-800 p-4">
