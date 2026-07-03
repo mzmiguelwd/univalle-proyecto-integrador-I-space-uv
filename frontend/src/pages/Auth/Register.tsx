@@ -50,13 +50,27 @@ const getErrorMessage = (error: unknown): string => {
       : "";
 
   const errorMap: Record<string, string> = {
-    "auth/email-already-in-use": "Este correo ya está registrado.",
-    "auth/invalid-email": "El correo electrónico no es válido.",
-    "auth/weak-password": "La contraseña es demasiado débil.",
-    "auth/network-request-failed": "Error de red. Verifica tu conexión.",
+    "auth/email-already-in-use":
+      "Este correo electrónico ya está registrado.",
+
+    "auth/invalid-email":
+      "El correo electrónico no tiene un formato válido.",
+
+    "auth/weak-password":
+      "La contraseña es demasiado débil. Usa al menos 8 caracteres.",
+
+    "auth/network-request-failed":
+      "No fue posible conectar con el servidor. Verifica tu conexión.",
+
+    "auth/too-many-requests":
+      "Has realizado demasiados intentos. Espera unos minutos antes de volver a intentarlo.",
   };
 
-  return errorMap[code] || message || "Ocurrió un error al crear la cuenta.";
+  return (
+    errorMap[code] ??
+    message ??
+    "No fue posible crear la cuenta. Inténtalo nuevamente."
+  );
 };
 
 const getPasswordStrength = (password: string) => {
@@ -324,9 +338,9 @@ export default function Register() {
             )}
 
             {/* FULL NAME */}
-            <FormField label="Nombre completo" htmlFor="name">
+            <FormField label="Nombre completo" htmlFor="register-name">
               <input
-                id="name"
+                id="register-name"
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -337,7 +351,7 @@ export default function Register() {
             </FormField>
 
             {/* USERNAME */}
-            <FormField label="Nombre de usuario" htmlFor="username">
+            <FormField label="Nombre de usuario" htmlFor="register-username">
               <div className="relative">
                 <span
                   className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm select-none"
@@ -346,7 +360,7 @@ export default function Register() {
                   @
                 </span>
                 <input
-                  id="username"
+                  id="register-username"
                   type="text"
                   value={username}
                   onChange={(event) => handleUsernameChange(event.target.value)}
@@ -389,9 +403,9 @@ export default function Register() {
             </FormField>
 
             {/* EMAIL */}
-            <FormField label="Correo electrónico" htmlFor="email">
+            <FormField label="Correo electrónico" htmlFor="register-email">
               <input
-                id="email"
+                id="register-email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -405,10 +419,10 @@ export default function Register() {
             </FormField>
 
             {/* PASSWORD */}
-            <FormField label="Contraseña" htmlFor="password">
+            <FormField label="Contraseña" htmlFor="register-password">
               <div className="relative">
                 <input
-                  id="password"
+                  id="register-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -452,10 +466,10 @@ export default function Register() {
             </FormField>
 
             {/* CONFIRM PASSWORD */}
-            <FormField label="Confirmar contraseña" htmlFor="confirmPassword">
+            <FormField label="Confirmar contraseña" htmlFor="register-confirm-password">
               <div className="relative">
                 <input
-                  id="confirmPassword"
+                  id="register-confirm-password"
                   type={showConfirm ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
@@ -526,9 +540,10 @@ export default function Register() {
             </div>
 
             {/* TERMS AND CONDITIONS */}
-            <label className="flex items-start gap-3 cursor-pointer group py-1 w-fit">
+            <label className="flex items-start gap-3 cursor-pointer group py-1 w-fit"  htmlFor="register-terms">
               <div className="relative mt-0.5 shrink-0 flex items-center justify-center">
                 <input
+                  id="register-terms"
                   type="checkbox"
                   checked={acceptTerms}
                   onChange={(event) => setAcceptTerms(event.target.checked)}

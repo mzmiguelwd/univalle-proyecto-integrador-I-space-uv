@@ -132,11 +132,14 @@ export default function MainStage({
   };
 
   return (
-    <div className="relative flex min-h-90 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-800 bg-[#1A1A1A] transition-all duration-300 h-full w-full">
+    <main
+      aria-label="Escenario principal de video"
+      className="relative flex min-h-90 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-800 bg-[#1A1A1A] transition-all duration-300 h-full w-full"
+    >
       <div className="flex-1 w-full h-full relative">{renderContent()}</div>
       <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md text-xs px-3 py-1.5 rounded-full flex items-center gap-2 text-white font-medium shadow-lg z-10">
         {renderStatusLabel()}
       </div>
-    </div>
+    </main>
   );
 }

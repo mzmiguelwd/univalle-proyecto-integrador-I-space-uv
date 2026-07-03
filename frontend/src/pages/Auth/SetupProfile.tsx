@@ -4,8 +4,7 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  Check,
-} from "lucide-react";
+  } from "lucide-react";
 
 import { auth } from "../../config/firebase.ts";
 import { checkUsernameAvailability, saveUsername } from "../../config/auth.ts";
@@ -239,6 +238,8 @@ export default function SetupProfile({
                 <input
                   id="setup-username"
                   type="text"
+                  aria-invalid={usernameAvailable === false}
+                  aria-describedby="setup-username-help setup-username-feedback"
                   value={username}
                   onChange={(event) => handleUsernameChange(event.target.value)}
                   placeholder="tu_usuario"
@@ -262,20 +263,38 @@ export default function SetupProfile({
               </div>
 
               {/* FEEDBACK MESSAGES */}
-              {usernameError && (
-                <p className="text-xs text-red-400 mt-1 flex items-center gap-1 animate-in fade-in">
-                  <AlertCircle className="w-3 h-3 shrink-0" />
-                  <span>{usernameError}</span>
-                </p>
-              )}
-              {usernameAvailable && !usernameError && (
-                <p className="text-xs text-green-400 mt-1 flex items-center gap-1 animate-in fade-in">
-                  <Check className="w-3 h-3 shrink-0" strokeWidth={3} />
-                  <span>¡Disponible!</span>
-                </p>
-              )}
-              <p className="text-[10px] text-white/25 mt-1">
+              
+              <p
+                id="setup-username-help"
+                className="text-[10px] text-white/25 mt-1"
+              >
                 Solo letras, números y guiones bajos. Sin espacios.
+              </p>
+
+              <p
+                id="setup-username-feedback"
+                aria-live="polite"
+                className={`text-xs mt-1 flex items-center gap-1 animate-in fade-in ${
+                  usernameAvailable === false
+                    ? "text-red-400"
+                    : usernameAvailable === true && username.length >= 3
+                      ? "text-green-400"
+                      : "text-transparent"
+                }`}
+              >
+                {usernameAvailable === false ? (
+                  <>
+                    <AlertCircle className="w-3 h-3" />
+                    {usernameError || "Este nombre de usuario no está disponible."}
+                  </>
+                ) : usernameAvailable === true && username.length >= 3 ? (
+                  <>
+                    <CheckCircle className="w-3 h-3" />
+                    Nombre de usuario disponible.
+                  </>
+                ) : (
+                  <span aria-hidden="true">.</span>
+                )}
               </p>
             </div>
 

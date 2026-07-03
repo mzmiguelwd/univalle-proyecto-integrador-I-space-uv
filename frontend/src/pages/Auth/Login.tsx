@@ -16,11 +16,28 @@ const getErrorMessage = (error: unknown): string => {
     "auth/invalid-credential": "Correo o contraseña incorrectos.",
     "auth/user-not-found": "No existe una cuenta con este correo.",
     "auth/wrong-password": "Contraseña incorrecta.",
+    "auth/invalid-email": "El correo electrónico no tiene un formato válido.",
     "auth/too-many-requests": "Demasiados intentos. Espera unos minutos.",
     "auth/user-disabled": "Esta cuenta ha sido deshabilitada.",
     "auth/network-request-failed": "Error de red. Verifica tu conexión.",
   };
   return errorMap[code] || "Credenciales inválidas o usuario no encontrado.";
+};
+
+const getGoogleLoginErrorMessage = (error: unknown): string => {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? (error as { code: string }).code
+      : "";
+
+  const errorMap: Record<string, string> = {
+    "auth/popup-closed-by-user": "Cerraste la ventana de Google antes de completar el inicio de sesión.",
+    "auth/cancelled-popup-request": "Ya hay una ventana de inicio de sesión abierta.",
+    "auth/popup-blocked": "El navegador bloqueó la ventana emergente de Google. Permite pop-ups e inténtalo de nuevo.",
+    "auth/network-request-failed": "Error de red. Verifica tu conexión.",
+  };
+
+  return errorMap[code] || "No pudimos iniciar sesión con Google. Inténtalo nuevamente.";
 };
 
 // SUB-COMPONENTS
@@ -84,13 +101,18 @@ const GoogleIcon = () => (
 
 const FormField = ({
   label,
+  htmlFor,
   children,
 }: {
   label: string;
+  htmlFor: string;
   children: React.ReactNode;
 }) => (
   <div className="space-y-1.5">
-    <label className="text-[10px] font-semibold tracking-[0.15em] text-white/50 uppercase">
+    <label
+      htmlFor={htmlFor}
+      className="text-[10px] font-semibold tracking-[0.15em] text-white/50 uppercase"
+    >
       {label}
     </label>
     {children}
@@ -146,7 +168,7 @@ export default function Login() {
       navigate("/dashboard");
     } catch (error: unknown) {
       console.error("Google Login Error:", error);
-      setError("Ocurrió un error al iniciar sesión con Google.");
+      setError(getGoogleLoginErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -191,8 +213,9 @@ export default function Login() {
             )}
 
             {/* EMAIL INPUT */}
-            <FormField label="Correo electrónico">
+            <FormField label="Correo electrónico" htmlFor="login-email">
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -203,7 +226,7 @@ export default function Login() {
             </FormField>
 
             {/* PASSWORD INPUT */}
-            <FormField label="Contraseña">
+            <FormField label="Contraseña" htmlFor="login-password">
               <div className="flex justify-end -mt-1 mb-1">
                 <Link
                   to="/forgot-password"
@@ -215,6 +238,7 @@ export default function Login() {
 
               <div className="relative">
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -240,9 +264,13 @@ export default function Login() {
             </FormField>
 
             {/* REMEMBER ME CHECKBOX */}
-            <label className="flex items-center gap-3 cursor-pointer group py-1 w-fit">
+            <label
+              htmlFor="remember-me"
+              className="flex items-center gap-3 cursor-pointer group py-1 w-fit"
+            >
               <div className="relative flex items-center justify-center">
                 <input
+                  id="remember-me"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(event) => setRememberMe(event.target.checked)}

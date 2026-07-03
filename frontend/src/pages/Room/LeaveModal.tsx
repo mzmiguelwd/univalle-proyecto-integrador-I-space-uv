@@ -27,7 +27,9 @@ export default function LeaveModal({
   return (
     <dialog
       open
+      aria-modal="true"
       aria-labelledby="leave-modal-title"
+      aria-describedby="leave-modal-description"
       className="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center bg-transparent p-4"
     >
       {/* BACKDROP LAYER */}
@@ -59,7 +61,10 @@ export default function LeaveModal({
               </h2>
             </header>
 
-            <p className="mb-6 text-sm text-gray-400">
+            <p
+              id="leave-modal-description"
+              className="mb-6 text-sm text-gray-400"
+            >
               {isOwner
                 ? "Como anfitrión, puedes salir en silencio o finalizar la llamada para todos. El chat y la sala seguirán guardados."
                 : "Estás a punto de abandonar esta sesión de estudio."}

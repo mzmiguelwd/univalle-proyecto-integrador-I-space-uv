@@ -200,7 +200,7 @@ export default function ParticipantsGrid({
 }: Readonly<ParticipantsGridProps>) {
   const total = participants.length + 1;
   const isSingleParticipant = total === 1;
-
+  // ParticipantsGrid.tsx
   const baseCardStyles = `rounded-xl overflow-hidden relative border transition-all duration-200 cursor-pointer hover:border-sky-500/80 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`;
   const getPinStyles = (isPinned: boolean) =>
     isPinned
@@ -220,6 +220,8 @@ export default function ParticipantsGrid({
       onPinUser(id);
     }
   };
+
+  const localDisplayName = profile.name?.split(" ")[0] || "Tú";
 
   return (
     <div className="shrink-0 flex flex-col">
@@ -247,7 +249,7 @@ export default function ParticipantsGrid({
           style={{ minHeight: cardMinHeight }}
           role="button"
           tabIndex={0}
-          aria-label="Pin my video"
+          aria-label={`Fijar video de ${localDisplayName} (tú)`}
         >
           <video
             ref={localVideoRef}
@@ -275,7 +277,7 @@ export default function ParticipantsGrid({
                 </div>
               )}
               <div className="absolute bottom-1.5 left-2 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-gray-200 shadow-sm truncate max-w-[70%] pointer-events-none">
-                {profile.name?.split(" ")[0] || "Tú"}
+                {localDisplayName}
               </div>
             </>
           )}
@@ -298,7 +300,7 @@ export default function ParticipantsGrid({
               style={{ minHeight: cardMinHeight }}
               role="button"
               tabIndex={0}
-              aria-label={`Pin ${participant.name}'s video`}
+              aria-label={`Fijar video de ${participant.name.split(" ")[0]}`}
             >
               {isCamActive ? (
                 <RemoteVideoCard
