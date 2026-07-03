@@ -52,16 +52,39 @@ export default function CreateRoom() {
       return;
     }
 
+    // Validación de campos requeridos en el cliente
+    const newFieldErrors: Record<string, string> = {};
+    const titleTrimmed = formData.title.trim();
+    const topicTrimmed = formData.topic.trim();
+
+    if (!titleTrimmed) {
+      newFieldErrors.title = "El nombre de la sala es obligatorio.";
+    }
+    if (!topicTrimmed) {
+      newFieldErrors.topic = "La descripción es obligatoria.";
+    }
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await createStudyRoom({
-        title: formData.title,
-        topic: formData.topic,
+        title: titleTrimmed,
+        topic: topicTrimmed,
         ownerId: currentUser.uid,
         type: formData.type,
         limit: Number.parseInt(formData.limit, 10),
         privacy: formData.privacy,
       });
-      navigate("/dashboard");
+      navigate("/dashboard", {
+        state: {
+          roomCreated: true,
+          roomTitle: titleTrimmed || "Tu sala",
+        },
+      });
     } catch (error: unknown) {
       const errorObj = error as CustomError;
       if (errorObj?.customErrors) {
@@ -148,6 +171,9 @@ export default function CreateRoom() {
                     rows={3}
                     className={`w-full resize-none rounded-lg border bg-[#121212] px-4 py-2.5 text-white transition-colors focus:border-sky-500 focus:outline-none ${fieldErrors.topic ? "border-red-500" : "border-gray-700"}`}
                   />
+                  {fieldErrors.topic && (
+                    <p className="text-xs text-red-400">{fieldErrors.topic}</p>
+                  )}
                 </div>
               </div>
 
