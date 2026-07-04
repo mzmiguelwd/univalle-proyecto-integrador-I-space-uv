@@ -68,6 +68,7 @@ export default function ChatPanel({
   const isInputEmpty = message.trim().length === 0;
 
   return (
+    // ChatPanel.tsx
     <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-gray-800 bg-[#121212]">
       {/* HEADER */}
       <header className="flex shrink-0 items-center justify-between border-b border-gray-800 p-4">
@@ -88,9 +89,11 @@ export default function ChatPanel({
       <div className="shrink-0 p-3">
         <form
           onSubmit={handleSendMessage}
+          aria-label="Enviar mensaje al chat de la sala"
           className="flex items-center rounded-xl border border-gray-700 bg-[#1E1E1E] pr-2 transition-all focus-within:border-sky-500/50 focus-within:ring-1 focus-within:ring-sky-500/50"
         >
           <input
+            id="room-chat-message"
             ref={inputRef}
             type="text"
             value={message}
@@ -102,6 +105,7 @@ export default function ChatPanel({
 
           <button
             type="submit"
+            aria-busy={isSubmitting}
             disabled={isInputEmpty || isSubmitting}
             aria-label="Enviar mensaje"
             className="p-2 text-sky-400 transition-colors hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:text-gray-600 rounded-lg"

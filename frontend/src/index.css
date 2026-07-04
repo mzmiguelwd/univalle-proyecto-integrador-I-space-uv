@@ -33,6 +33,16 @@ body {
   button:disabled {
     cursor: not-allowed;
   }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 3px solid #8ecdfd;
+    outline-offset: 3px;
+  }
 }
 
 .animate-fade-in {
