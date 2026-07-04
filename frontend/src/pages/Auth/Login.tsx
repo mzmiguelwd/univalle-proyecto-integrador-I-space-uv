@@ -60,9 +60,10 @@ const DesktopHeroPanel = () => (
         className="w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5ab4e8] focus-visible:ring-offset-4 focus-visible:ring-offset-[#0d0f14] rounded-sm"
         aria-label="Volver a la página de inicio"
       >
-        <h1 className="text-3xl font-bold text-[#5ab4e8] tracking-tight font-serif hover:text-[#7cc4ef] transition-colors">
+        {/* CORRECCIÓN H1: Cambiado a span para no competir con el título principal */}
+        <span className="text-3xl font-bold text-[#5ab4e8] tracking-tight font-serif hover:text-[#7cc4ef] transition-colors block">
           Space UV
-        </h1>
+        </span>
       </Link>
       <blockquote className="text-white text-lg italic font-light leading-relaxed max-w-sm">
         "La concentración es la raíz de todas las facultades del hombre."
@@ -78,9 +79,10 @@ const MobileHeroPanel = () => (
   >
     <div className="absolute inset-0 bg-[#0d0f14]/80" />
     <div className="relative z-10 flex items-center justify-center h-full">
-      <h1 className="text-2xl sm:text-3xl font-bold text-[#5ab4e8] font-serif tracking-tight">
+      {/* CORRECCIÓN H1: Cambiado a span */}
+      <span className="text-2xl sm:text-3xl font-bold text-[#5ab4e8] font-serif tracking-tight block">
         Space UV
-      </h1>
+      </span>
     </div>
   </div>
 );
@@ -197,9 +199,10 @@ export default function Login() {
           <MobileHeroPanel />
 
           <header className="mb-6 sm:mb-8">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">
+            {/* CORRECCIÓN H1: Ahora este es el H1 descriptivo de la página */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">
               Bienvenido
-            </h2>
+            </h1>
             <p className="text-white/80 text-base">
               Inicia sesión con tus datos
             </p>
@@ -235,6 +238,7 @@ export default function Login() {
                 placeholder="correo@ejemplo.com"
                 autoComplete="email"
                 required
+                autoFocus // CORRECCIÓN FOCUS: Ayuda a asegurar el enfoque inicial
                 aria-invalid={!!error}
                 aria-describedby={error ? "login-error-message" : undefined}
                 className={inputStyles}
