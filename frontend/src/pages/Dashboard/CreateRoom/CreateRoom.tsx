@@ -164,16 +164,16 @@ export default function CreateRoom() {
   };
 
   useEffect(() => {
-  const currentUser = auth.currentUser;
+    const currentUser = auth.currentUser;
 
-  if (!currentUser?.uid) {
-    setOwnRooms([]);
-    setIsLoadingOwnRooms(false);
-    return;
-  }
+    if (!currentUser?.uid) {
+      setOwnRooms([]);
+      setIsLoadingOwnRooms(false);
+      return;
+    }
 
-  const unsubscribe = subscribeToOwnStudyRooms(
-    currentUser.uid,
+    const unsubscribe = subscribeToOwnStudyRooms(
+      currentUser.uid,
       (rooms) => {
         setOwnRooms(rooms.slice(0, 3));
         setIsLoadingOwnRooms(false);
@@ -207,8 +207,8 @@ export default function CreateRoom() {
             </h1>
 
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-400">
-              Configura un espacio colaborativo para estudiar con tus compañeros en
-              tiempo real.
+              Configura un espacio colaborativo para estudiar con tus compañeros
+              en tiempo real.
             </p>
           </div>
 
@@ -225,8 +225,9 @@ export default function CreateRoom() {
                 </h2>
 
                 <p className="text-sm leading-relaxed text-sky-100/80">
-                  Puedes <strong>crear una nueva sala</strong> para iniciar una sesión de
-                  estudio, <strong>ingresar mediante un código</strong> o retomar una de
+                  Puedes <strong>crear una nueva sala</strong> para iniciar una
+                  sesión de estudio,{" "}
+                  <strong>ingresar mediante un código</strong> o retomar una de
                   tus <strong>salas activas</strong> desde el panel lateral.
                 </p>
               </div>
@@ -276,10 +277,9 @@ export default function CreateRoom() {
                     className={`w-full rounded-lg border bg-[#121212] px-4 py-2.5 text-white transition-colors focus:border-sky-500 focus:outline-none ${fieldErrors.title ? "border-red-500" : "border-gray-700"}`}
                   />
                   {fieldErrors.title && (
-                    <p
-                      id="room-title-error"
-                      className="text-xs text-red-400"
-                    >{fieldErrors.title}</p>
+                    <p id="room-title-error" className="text-xs text-red-400">
+                      {fieldErrors.title}
+                    </p>
                   )}
                 </div>
 
@@ -307,10 +307,7 @@ export default function CreateRoom() {
                   />
 
                   {fieldErrors.topic && (
-                    <p
-                      id="room-topic-error"
-                      className="text-xs text-red-400"
-                    >
+                    <p id="room-topic-error" className="text-xs text-red-400">
                       {fieldErrors.topic}
                     </p>
                   )}
@@ -349,7 +346,9 @@ export default function CreateRoom() {
                   <select
                     id="participant-limit"
                     aria-invalid={Boolean(fieldErrors.limit)}
-                    aria-describedby={fieldErrors.limit ? "room-limit-error" : undefined}
+                    aria-describedby={
+                      fieldErrors.limit ? "room-limit-error" : undefined
+                    }
                     value={formData.limit}
                     onChange={(event) =>
                       setFormData({ ...formData, limit: event.target.value })
@@ -451,118 +450,109 @@ const PreviewCard = ({
   const navigate = useNavigate();
 
   return (
-  <aside className="space-y-6">
-    <section className="rounded-xl border border-gray-800 bg-[#1C1C1C] p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <LogIn className="h-5 w-5 text-sky-400" />
-        <h3 className="text-sm font-semibold text-white">
-          Unirse con código
-        </h3>
-      </div>
-
-      <input
-        value={roomCode}
-        onChange={(e) => {
-          setRoomCode(e.target.value);
-          setJoinError("");
-        }}
-        placeholder="Ej: ABC123"
-        className="mb-3 w-full rounded-lg border border-gray-700 bg-[#121212] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
-      />
-
-      {joinError && (
-        <p className="mb-3 text-xs text-red-400">
-          {joinError}
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={handleJoinByCode}
-        disabled={isJoiningRoom}
-        className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
-      >
-        {isJoiningRoom ? "Ingresando..." : "Unirse a la sala"}
-      </button>
-    </section>
-    <section className="rounded-xl border border-gray-800 bg-[#1C1C1C] p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
+    <aside className="space-y-6">
+      <section className="rounded-xl border border-gray-800 bg-[#1C1C1C] p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <LogIn className="h-5 w-5 text-sky-400" />
           <h3 className="text-sm font-semibold text-white">
-            Tus salas activas
+            Unirse con código
           </h3>
-          <p className="text-xs text-gray-500">
-            Retoma una sala creada recientemente.
-          </p>
         </div>
-        <Users className="h-5 w-5 text-sky-400" aria-hidden="true" />
-      </div>
 
-      {isLoadingOwnRooms ? (
-        <p className="text-sm text-gray-500">Cargando salas...</p>
-      ) : ownRooms.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          Aún no tienes salas activas.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {ownRooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              onClick={() => navigate(`/room/${room.id}`)}
-              className="w-full rounded-xl border border-gray-800 bg-[#121212] p-3 text-left transition-colors hover:border-sky-700 hover:bg-[#16202A]"
-            >
-              <p className="line-clamp-1 text-sm font-semibold text-sky-100">
-                {room.title}
-              </p>
-              <p className="line-clamp-1 text-xs text-gray-500">
-                {room.topic || "Sin descripción"}
-              </p>
-              <p className="mt-2 text-[11px] font-medium text-gray-400">
-                ID: <span className="font-mono text-sky-300">{room.id}</span>
-              </p>
-            </button>
-          ))}
-        </div>
-      )}
-    </section>
-    <div className="rounded-xl border border-gray-800 bg-[#1C1C1C] p-6">
-      <span className="mb-4 inline-block rounded bg-[#E5B567] px-3 py-1 text-xs font-bold text-gray-900">
-        Vista previa
-      </span>
-      <h3 className="mb-3 wrap-break-word text-xl font-bold text-sky-200">
-        {formData.title || "Nombre de la sala"}
-      </h3>
-      <p className="mb-6 min-h-16 text-sm text-gray-400 line-clamp-4">
-        {formData.topic || "La descripción de tu sala aparecerá aquí..."}
-      </p>
+        <input
+          value={roomCode}
+          onChange={(e) => {
+            setRoomCode(e.target.value);
+          }}
+          placeholder="Ej: ABC123"
+          className="mb-3 w-full rounded-lg border border-gray-700 bg-[#121212] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+        />
 
-      <div className="grid grid-cols-2 gap-4">
-        {[
-          { label: "Participantes", value: `${formData.limit} máx.` },
-          { label: "Privacidad", value: formData.privacy },
-          { label: "Cámara/Audio", value: "Libre", color: "text-emerald-400" },
-          { label: "Historial", value: "Guardado", color: "text-sky-400" },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-lg border border-gray-800 bg-[#121212] p-3"
-          >
-            <p className="mb-1 text-xs text-gray-500">{stat.label}</p>
-            <p className={`text-sm font-bold text-white ${stat.color || ""}`}>
-              {stat.value}
+        {joinError && <p className="mb-3 text-xs text-red-400">{joinError}</p>}
+
+        <button
+          type="button"
+          onClick={handleJoinByCode}
+          disabled={isJoiningRoom}
+          className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+        >
+          {isJoiningRoom ? "Ingresando..." : "Unirse a la sala"}
+        </button>
+      </section>
+      <section className="rounded-xl border border-gray-800 bg-[#1C1C1C] p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">
+              Tus salas activas
+            </h3>
+            <p className="text-xs text-gray-500">
+              Retoma una sala creada recientemente.
             </p>
           </div>
-          
-        ))}
-      </div>
-    </div>
+          <Users className="h-5 w-5 text-sky-400" aria-hidden="true" />
+        </div>
 
-    
-    
-  </aside>
+        {isLoadingOwnRooms ? (
+          <p className="text-sm text-gray-500">Cargando salas...</p>
+        ) : ownRooms.length === 0 ? (
+          <p className="text-sm text-gray-500">Aún no tienes salas activas.</p>
+        ) : (
+          <div className="space-y-3">
+            {ownRooms.map((room) => (
+              <button
+                key={room.id}
+                type="button"
+                onClick={() => navigate(`/room/${room.id}`)}
+                className="w-full rounded-xl border border-gray-800 bg-[#121212] p-3 text-left transition-colors hover:border-sky-700 hover:bg-[#16202A]"
+              >
+                <p className="line-clamp-1 text-sm font-semibold text-sky-100">
+                  {room.title}
+                </p>
+                <p className="line-clamp-1 text-xs text-gray-500">
+                  {room.topic || "Sin descripción"}
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-gray-400">
+                  ID: <span className="font-mono text-sky-300">{room.id}</span>
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+      <div className="rounded-xl border border-gray-800 bg-[#1C1C1C] p-6">
+        <span className="mb-4 inline-block rounded bg-[#E5B567] px-3 py-1 text-xs font-bold text-gray-900">
+          Vista previa
+        </span>
+        <h3 className="mb-3 wrap-break-word text-xl font-bold text-sky-200">
+          {formData.title || "Nombre de la sala"}
+        </h3>
+        <p className="mb-6 min-h-16 text-sm text-gray-400 line-clamp-4">
+          {formData.topic || "La descripción de tu sala aparecerá aquí..."}
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            { label: "Participantes", value: `${formData.limit} máx.` },
+            { label: "Privacidad", value: formData.privacy },
+            {
+              label: "Cámara/Audio",
+              value: "Libre",
+              color: "text-emerald-400",
+            },
+            { label: "Historial", value: "Guardado", color: "text-sky-400" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-lg border border-gray-800 bg-[#121212] p-3"
+            >
+              <p className="mb-1 text-xs text-gray-500">{stat.label}</p>
+              <p className={`text-sm font-bold text-white ${stat.color || ""}`}>
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
   );
 };
-
-
