@@ -7,11 +7,27 @@ export default function setupSwagger(app: Application, port: number | string) {
     definition: {
       openapi: "3.0.0",
       info: {
-        title: "Backend API",
-        version: "1.0.0",
-        description: "API documentation",
+      title: "Space UV API",
+      version: "1.0.0",
+      description: `
+    Documentación técnica del Salón de Estudio Colaborativo en Tiempo Real Space UV.
+
+    La aplicación utiliza:
+
+    - Firebase Authentication para el registro e inicio de sesión.
+    - Firestore para usuarios, salas y mensajes.
+    - Socket.IO para comunicación en tiempo real.
+    - WebRTC para videollamadas, audio y compartir pantalla.
+
+    Algunas operaciones descritas en esta documentación se ejecutan directamente desde el frontend mediante Firebase SDK y se incluyen como endpoints documentales para representar el funcionamiento real del sistema.
+      `,
+    },
+    servers: [
+      {
+        url: `http://localhost:${port}`,
+        description: "Servidor local de desarrollo",
       },
-      servers: [{ url: `http://localhost:${port}` }],
+    ],
       tags: [
         {
           name: "ExternalAuth",
@@ -22,6 +38,11 @@ export default function setupSwagger(app: Application, port: number | string) {
           name: "ExternalFirestore",
           description:
             "Firestore (servicio externo). Documenta como el frontend lee/escribe usuarios en la coleccion users.",
+        },
+        {
+          name: "StudyRooms",
+          description:
+            "Operaciones realizadas desde el frontend sobre la colección rooms de Firestore: crear, consultar, listar, editar y finalizar salas de estudio.",
         },
       ],
       components: {
@@ -112,6 +133,193 @@ export default function setupSwagger(app: Application, port: number | string) {
               username: { type: "string", example: "juanp" },
             },
           },
+          StudyRoom: {
+          type: "object",
+          required: [
+            "id",
+            "title",
+            "topic",
+            "ownerId",
+            "type",
+            "limit",
+            "privacy",
+            "isActive",
+          ],
+          properties: {
+            id: {
+              type: "string",
+              example: "9KmX4pQ2nLBv7sYt6WcD",
+              description:
+                "Identificador generado automáticamente por Firestore. También funciona como código de acceso a la sala.",
+            },
+            title: {
+              type: "string",
+              minLength: 3,
+              maxLength: 80,
+              example: "Preparación parcial de cálculo",
+            },
+            topic: {
+              type: "string",
+              minLength: 3,
+              maxLength: 120,
+              example: "Integrales y ecuaciones diferenciales",
+            },
+            ownerId: {
+              type: "string",
+              example: "firebase_uid_123",
+              description: "UID del usuario creador de la sala.",
+            },
+            type: {
+              type: "string",
+              example: "study",
+              description: "Tipo o modalidad de la sala.",
+            },
+            limit: {
+              type: "integer",
+              minimum: 1,
+              example: 8,
+              description: "Cantidad máxima de participantes.",
+            },
+            privacy: {
+              type: "string",
+              example: "private",
+              description: "Nivel de privacidad configurado para la sala.",
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+              example: "2026-07-10T20:30:00.000Z",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+              example: "2026-07-10T21:15:00.000Z",
+            },
+            isActive: {
+              type: "boolean",
+              example: true,
+              description:
+                "Indica si la sala continúa disponible para ser consultada e ingresada.",
+            },
+          },
+        },
+
+        CreateStudyRoomRequest: {
+          type: "object",
+          required: [
+            "title",
+            "topic",
+            "ownerId",
+            "type",
+            "limit",
+            "privacy",
+          ],
+          properties: {
+            title: {
+              type: "string",
+              minLength: 3,
+              maxLength: 80,
+              example: "Preparación parcial de cálculo",
+            },
+            topic: {
+              type: "string",
+              minLength: 3,
+              maxLength: 120,
+              example: "Integrales y ecuaciones diferenciales",
+            },
+            ownerId: {
+              type: "string",
+              example: "firebase_uid_123",
+            },
+            type: {
+              type: "string",
+              example: "study",
+            },
+            limit: {
+              type: "integer",
+              minimum: 1,
+              example: 8,
+            },
+            privacy: {
+              type: "string",
+              example: "private",
+            },
+          },
+        },
+
+        CreateStudyRoomResponse: {
+          type: "object",
+          properties: {
+            roomId: {
+              type: "string",
+              example: "9KmX4pQ2nLBv7sYt6WcD",
+              description:
+                "ID generado por Firestore para la nueva sala de estudio.",
+            },
+          },
+        },
+
+        UpdateStudyRoomRequest: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              minLength: 3,
+              maxLength: 80,
+              example: "Preparación final de cálculo",
+            },
+            topic: {
+              type: "string",
+              minLength: 3,
+              maxLength: 120,
+              example: "Repaso general de integrales",
+            },
+            type: {
+              type: "string",
+              example: "study",
+            },
+            limit: {
+              type: "integer",
+              minimum: 1,
+              example: 10,
+            },
+            privacy: {
+              type: "string",
+              example: "private",
+            },
+          },
+        },
+
+        RoomValidationError: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              example: "Error de validación en la sala de estudio.",
+            },
+            errors: {
+              type: "object",
+              additionalProperties: {
+                type: "string",
+              },
+              example: {
+                title: "El nombre de la sala debe tener al menos 3 caracteres.",
+                topic: "El tema debe tener al menos 3 caracteres.",
+              },
+            },
+          },
+        },
+
+        FirestoreError: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              example: "No fue posible completar la operación en Firestore.",
+            },
+          },
+        },
         },
       },
       paths: {
@@ -379,10 +587,249 @@ export default function setupSwagger(app: Application, port: number | string) {
             },
           },
         },
+        "/rooms": {
+          post: {
+            tags: ["StudyRooms"],
+            summary: "Crear una sala de estudio",
+            description:
+              "Documenta la creación de una sala mediante Firebase Firestore. El frontend ejecuta addDoc sobre la colección rooms, agrega createdAt con serverTimestamp e inicializa isActive en true.",
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/CreateStudyRoomRequest",
+                  },
+                },
+              },
+            },
+            responses: {
+              "201": {
+                description: "Sala creada correctamente",
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/CreateStudyRoomResponse",
+                    },
+                  },
+                },
+              },
+              "400": {
+                description: "Los datos enviados no superaron la validación",
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/RoomValidationError",
+                    },
+                  },
+                },
+              },
+              "500": {
+                description: "Error al crear la sala en Firestore",
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/FirestoreError",
+                    },
+                  },
+                },
+              },
+            },
+          },
+
+          get: {
+            tags: ["StudyRooms"],
+            summary: "Listar las salas propias del usuario",
+            description:
+              "Documenta la consulta de salas activas creadas por un usuario. El frontend filtra la colección rooms por ownerId e isActive igual a true, y ordena los resultados por createdAt de forma descendente.",
+            parameters: [
+              {
+                name: "ownerId",
+                in: "query",
+                required: true,
+                description:
+                  "UID de Firebase del usuario propietario de las salas.",
+                schema: {
+                  type: "string",
+                  example: "firebase_uid_123",
+                },
+              },
+            ],
+            responses: {
+              "200": {
+                description: "Lista de salas activas del usuario",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "array",
+                      items: {
+                        $ref: "#/components/schemas/StudyRoom",
+                      },
+                    },
+                  },
+                },
+              },
+              "400": {
+                description: "No se proporcionó el identificador del propietario",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        message: {
+                          type: "string",
+                          example: "El parámetro ownerId es obligatorio.",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              "500": {
+                description: "Error al consultar las salas en Firestore",
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/FirestoreError",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "/rooms/{roomId}": {
+          get: {
+            tags: ["StudyRooms"],
+            summary: "Consultar una sala por su código",
+            description:
+              "Documenta la búsqueda de una sala mediante su identificador de Firestore. El frontend utiliza getDoc para recuperar la información de la sala antes de permitir el ingreso.",
+
+            parameters: [
+              {
+                name: "roomId",
+                in: "path",
+                required: true,
+                schema: {
+                  type: "string",
+                },
+                example: "9KmX4pQ2nLBv7sYt6WcD",
+              },
+            ],
+
+            responses: {
+              "200": {
+                description: "Sala encontrada",
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/StudyRoom",
+                    },
+                  },
+                },
+              },
+
+              "404": {
+                description: "La sala no existe",
+              },
+
+              "500": {
+                description: "Error consultando Firestore",
+              },
+            },
+          },
+
+          patch: {
+            tags: ["StudyRooms"],
+            summary: "Actualizar una sala",
+
+            description:
+              "Documenta la actualización parcial de una sala utilizando updateDoc sobre Firestore.",
+
+            parameters: [
+              {
+                name: "roomId",
+                in: "path",
+                required: true,
+                schema: {
+                  type: "string",
+                },
+              },
+            ],
+
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/UpdateStudyRoomRequest",
+                  },
+                },
+              },
+            },
+
+            responses: {
+              "200": {
+                description: "Sala actualizada correctamente",
+              },
+
+              "400": {
+                description: "Datos inválidos",
+              },
+
+              "404": {
+                description: "Sala no encontrada",
+              },
+            },
+          },
+
+          delete: {
+            tags: ["StudyRooms"],
+
+            summary: "Finalizar una sala",
+
+            description:
+              "Documenta el cierre lógico de una sala estableciendo isActive=false.",
+
+            parameters: [
+              {
+                name: "roomId",
+                in: "path",
+                required: true,
+                schema: {
+                  type: "string",
+                },
+              },
+            ],
+
+            responses: {
+              "204": {
+                description: "Sala finalizada",
+              },
+
+              "404": {
+                description: "Sala no encontrada",
+              },
+            },
+          },
+        },
       },
     },
     apis: [],
   });
 
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      customSiteTitle: "Space UV | Documentación API",
+      swaggerOptions: {
+        docExpansion: "none",
+        filter: true,
+        displayRequestDuration: true,
+        persistAuthorization: true,
+        tryItOutEnabled: false,
+      },
+    }),
+  );
 }

@@ -446,6 +446,11 @@ export default function Register() {
                 </button>
               </div>
 
+              {/* Microcopia */}
+              <p className="text-[10px] text-white/25 mt-1">
+                La contraseña debe tener al menos 6 caracteres.
+              </p>
+
               {/* PASSWORD STRENGTH INDICATOR */}
               {password.length > 0 && (
                 <div className="mt-2 space-y-1 animate-in fade-in duration-300">
