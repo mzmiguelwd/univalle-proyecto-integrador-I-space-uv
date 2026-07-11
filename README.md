@@ -39,6 +39,10 @@ Asegúrate de tener instalado:
 ## Setup local
 
 1. Clona el repositorio.
+
+```bash
+git clone https://github.com/mzmiguelwd/univalle-proyecto-integrador-I-space-uv.git
+```
 2. Instala las dependencias del proyecto principal:
 
 ```bash
